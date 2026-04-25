@@ -115,6 +115,7 @@ echo "==> 3-way merging review files..."
 CLEAN_MERGES=()
 CONFLICTS=()
 NO_CHANGE=()
+FIRST_RUN=()
 
 for f in "${REVIEW_FILES[@]}"; do
     # Skip if file doesn't exist in template (template doesn't have it for some reason)
@@ -147,17 +148,25 @@ for f in "${REVIEW_FILES[@]}"; do
         continue
     fi
 
-    # 3-way merge: base = last synced version from template (or theirs if no base yet)
-    BASE_TMP=$(mktemp)
-    if [ -f "$BASE_DIR/$f" ]; then
-        cp "$BASE_DIR/$f" "$BASE_TMP"
-    else
-        # First sync — use theirs as the implicit base.
-        # This means 3-way merge sees no template-side changes, so any local
-        # divergence stays as-is. Conservative: nothing changes on first pass
-        # for review files. (Re-run after committing to get real merges.)
-        cp "$THEIRS_TMP" "$BASE_TMP"
+    # 3-way merge: base = last synced version from template
+    if [ ! -f "$BASE_DIR/$f" ]; then
+        # First sync of this file. We have no common-ancestor, so we can't
+        # safely merge — we'd risk silently overwriting customisations OR
+        # silently keeping stale code. The safe thing is to:
+        #   1. Save the template's current version as the base
+        #   2. Tell the user to manually diff and decide
+        #   3. Make NO changes to the working file this run
+        # On the next sync, we'll have a real base and can do real 3-way merges.
+        mkdir -p "$(dirname "$BASE_DIR/$f")"
+        cp "$THEIRS_TMP" "$BASE_DIR/$f"
+        rm "$THEIRS_TMP"
+        FIRST_RUN+=("$f")
+        echo "  FIRST RUN: $f (saved template version as baseline; review manually with: git diff $TEMPLATE_REMOTE_NAME/main -- $f)"
+        continue
     fi
+
+    BASE_TMP=$(mktemp)
+    cp "$BASE_DIR/$f" "$BASE_TMP"
 
     # `git merge-file` does a 3-way merge in place on the first arg.
     # Returns 0 if clean, >0 if conflicts.
@@ -208,8 +217,21 @@ echo ""
 echo "Safe files updated:    ${#SAFE_FILES[@]}"
 echo "Clean merges:          ${#CLEAN_MERGES[@]}"
 echo "No changes needed:     ${#NO_CHANGE[@]}"
+echo "First-run baseline:    ${#FIRST_RUN[@]}"
 echo "Conflicts to resolve:  ${#CONFLICTS[@]}"
 echo ""
+
+if [ "${#FIRST_RUN[@]}" -gt 0 ]; then
+    echo "First-run files (no changes made — diff against template manually):"
+    for f in "${FIRST_RUN[@]}"; do
+        echo "  $f"
+        echo "    git diff $TEMPLATE_REMOTE_NAME/main -- $f"
+    done
+    echo ""
+    echo "These files have a saved baseline now. The next 'make sync-template'"
+    echo "will do a real 3-way merge against template changes since today."
+    echo ""
+fi
 
 if [ "${#CONFLICTS[@]}" -gt 0 ]; then
     echo "Files with conflict markers — open and resolve:"
