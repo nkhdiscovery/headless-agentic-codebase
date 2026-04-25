@@ -8,6 +8,41 @@ You can do steps 1–5 entirely from your phone. Steps 6–7 need a Linux/macOS 
 
 ---
 
+## Step 0 — Install and authenticate the agent (one-time, laptop)
+
+Skip this if you've already set up an agent runtime on this machine.
+
+**Pick one runtime.** They all work the same with this template — you can switch later via `agent.config`.
+
+**Claude Code (recommended default — most thoroughly tested)**
+```bash
+npm install -g @anthropic-ai/claude-code
+claude login   # opens browser, sign in with Pro/Max account or paste API key
+```
+Pro plan: ~$20/month, fine for casual agent runs. Max plan: ~$100/month, recommended if running 24/7. API: pay-per-token, can get expensive at 24/7.
+
+**Gemini CLI (free tier available)**
+```bash
+npm install -g @google/gemini-cli
+gemini auth   # browser flow
+```
+Free tier is generous. Works well for many projects but the template's prompts are tuned to Claude.
+
+**Codex CLI (OpenAI)**
+```bash
+npm install -g @openai/codex
+codex login   # ChatGPT Plus/Pro account or set OPENAI_API_KEY
+```
+
+**Verify:**
+```bash
+claude --version    # or gemini --version / codex --version
+gh auth status      # GitHub CLI also needed
+docker --version    # Docker required
+```
+
+---
+
 ## Step 1 — Create your project repo from the template
 
 **Where:** GitHub mobile app or web.
@@ -111,20 +146,41 @@ The agent will replace the generic template README with a project-specific one d
 
 ---
 
-## Step 6 — Build the dev container and supervised trial
+## Step 6 — Configure runtime, build, and supervised trial
 
-**Where:** Your laptop. Requires Docker, GitHub CLI authenticated, an agent CLI installed and authenticated (Claude Code / Gemini CLI / Codex CLI).
+**Where:** Your laptop. Requires what you set up in Step 0 (Docker, gh CLI, agent CLI, Claude/Gemini/Codex auth).
 
-**What:**
+**Configure runtime and model** by editing `agent.config` in your repo:
 
 ```bash
 git clone <your-new-repo>
 cd <your-new-repo>
 
-# Set the agent runtime if not Claude (the default)
-# Edit agent.config or:
-# AGENT_RUNTIME=gemini
+cat agent.config
+```
 
+You should see something like:
+```bash
+AGENT_RUNTIME="${AGENT_RUNTIME:-claude}"
+AGENT_MODEL="${AGENT_MODEL:-default}"
+AGENT_IDLE_SLEEP="${AGENT_IDLE_SLEEP:-600}"
+```
+
+**Decide model based on your subscription:**
+
+| Runtime | Best (24/7 work) | Cheap (rapid iteration) |
+|---|---|---|
+| Claude Code | `claude-opus-4-7` (default) | `claude-sonnet-4-6` |
+| Gemini CLI | `gemini-2.5-pro` | `gemini-2.5-flash` |
+| Codex CLI | `gpt-5-codex` | `gpt-5` |
+
+For Claude Pro plan or paid-by-token API: use Sonnet (much cheaper, still capable). For Claude Max or free Gemini tier: use the flagship.
+
+Edit `agent.config` to set your choice (e.g. `AGENT_MODEL="sonnet"`), commit, push.
+
+**Build and run supervised trial:**
+
+```bash
 make build              # build the dev container (minimal — just the agent CLIs)
 make agent-start        # first cycle will apply your docs/stack.md
 ```
@@ -134,7 +190,7 @@ In another terminal:
 tail -f logs/daily/$(date +%Y-%m-%d).md
 ```
 
-**The first cycle is special.** The agent sees `docs/stack.md`, applies it (Dockerfile snippets, Makefile targets, scaffold files, CI config), runs `make build && make ci` until green, moves the file to `docs/stack-applied.md`, commits, self-merges. This typically takes 5–15 minutes depending on which addons you picked.
+**The first cycle is special.** The agent sees `docs/stack.md`, applies it (Dockerfile snippets, Makefile targets, scaffold files, CI config), runs `make build && make ci` until green, replaces the template README with a project-specific one, moves the file to `docs/stack-applied.md`, commits, self-merges. This typically takes 5–15 minutes depending on which addons you picked.
 
 **Subsequent cycles** are normal: agent picks the highest-priority `ready-for-agent` issue (the picker prompt seeded 3 of these for you), branches, plans, tests, implements, self-merges.
 
@@ -171,6 +227,33 @@ While you're away, from your phone:
 | See what's in flight | Filter issues by `in-progress` label |
 
 The agent reads GitHub fresh every cycle, so anything you change reaches it within 10 minutes.
+
+---
+
+## How agent context works (worth understanding)
+
+**TL;DR: context is fresh every 10 minutes. Files are the long-term memory.**
+
+The launcher runs the agent CLI (`claude -p ...` or equivalent) in a `while true` loop. **Each loop iteration starts a brand-new context.** When the cycle finishes (PR merged, queue checked, etc.), the context is discarded. 10 minutes later, a fresh cycle reads `CLAUDE.md` and the relevant docs from scratch.
+
+This means:
+
+- **Context never grows unboundedly.** A single cycle is bounded by the model's context window (Opus: ~200K tokens — plenty for any reasonable PR).
+- **Conversation history doesn't accumulate.** The agent has no memory of what it did three days ago, except via files.
+- **Files are the memory.** Anything that needs to persist across cycles must be committed to the repo: ADRs, `logs/progress.md`, `docs/codebase/<module>.md`, GitHub issues, git history.
+
+What this means in practice:
+
+| Concern | Reality |
+|---|---|
+| Token cost grows over time? | No — bounded per cycle |
+| Agent forgets architectural decisions? | Only if you don't write them as ADRs |
+| Agent re-reads everything every cycle? | Yes, the relevant subset. That's why `CLAUDE.md` is short |
+| Long-running tasks across cycles? | Use GitHub issues or `plans/<n>-<slug>.md` to hand off state |
+
+The only thing that grows over time is `logs/daily/` (one file per day). After months you can archive old daily logs — the agent doesn't read them unless asked.
+
+**This design is why the docs and ADR system matter so much.** They're the agent's long-term memory. If you want the agent to "remember" something across cycles, write it down somewhere it'll re-read.
 
 ---
 
