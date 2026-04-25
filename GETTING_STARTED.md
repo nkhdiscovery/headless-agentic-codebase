@@ -58,25 +58,31 @@ Each file replaces a template stub or creates a new ADR. Use the commit message 
 
 ---
 
-## Step 4 — Pick your stacks and addons
+## Step 4 — Pick and apply your stacks and addons (AI-assisted)
 
-**Where:** Read [`STACKS_AND_ADDONS.md`](./STACKS_AND_ADDONS.md), then apply on your laptop.
+**Where:** AI chat (Claude.ai or similar). Then your laptop for the apply commands.
 
-**What:** The core of this template is language-agnostic. Pick:
+**What:** This step requires picking the right language toolchain and feature scaffolds, plus some Docker/Makefile/CI plumbing. Rather than learn it all yourself, paste [`STACK_PICKER_PROMPT.md`](./STACK_PICKER_PROMPT.md) into an AI chat and let it walk you through.
 
-- **One or more stacks** for language toolchains (`python`, `node`, `go`, `rust`)
-- **Zero or more addons** for project shape (`fastapi`, `nextjs`, `mobile-rn`, `mobile-native`, `desktop-tauri`, `cli-tool`, `openapi-clients`)
+The prompt will:
 
-`STACKS_AND_ADDONS.md` lists common combinations. Pick the smallest set that matches your project.
+1. **Phase 1 — Pick (5 min):** Ask 4 quick questions about your project, then propose a stack + addon set with one-line justifications. You confirm or push back.
+2. **Phase 2 — Apply (15 min):** Give you copy-paste commands for each step (append Dockerfile snippets, replace Makefile targets, copy scaffold files, update CI). One step at a time, with verification commands. If something fails, debug interactively.
+3. **Phase 3 — Cheat sheet:** Daily commands, where to put new code, first three `ready-for-agent` issues to file.
 
-For each, follow the apply instructions in its `README.md` — typically:
-1. Append a snippet to `docker/Dockerfile.dev`
-2. Replace placeholder targets in `Makefile`
-3. Copy scaffold files into the project layout
-4. Add the addon's invariant block to your `CLAUDE.md`
-5. Set `DOCS_GATE_*` env vars in `.github/workflows/ci.yml`
+If you'd rather pick manually, [`STACKS_AND_ADDONS.md`](./STACKS_AND_ADDONS.md) has the catalogue and common combinations.
 
-You can do this from your laptop; not designed for phone.
+**Common combinations** (picker will recommend something close to one of these):
+
+| Project type | Stacks + addons |
+|---|---|
+| Backend + admin web | `python` + `node` + `fastapi` + `nextjs` |
+| Mobile-first SaaS | `python` + `node` + `fastapi` + `mobile-rn` + `openapi-clients` |
+| Premium photo/video app | `python` + `fastapi` + `mobile-native` + `desktop-tauri` |
+| CLI tool | `go` + `cli-tool` |
+| AI/ML project | `python` only |
+
+This step needs a laptop with Docker. Not designed for phone.
 
 ---
 
@@ -169,9 +175,10 @@ The agent reads GitHub fresh every cycle, so anything you change reaches it with
 |---|---|
 | [`README.md`](./README.md) | You want a project overview + daily workflow reference |
 | `GETTING_STARTED.md` (this) | You're starting a new project — follow it linearly |
-| [`BOOTSTRAP_PROMPT.md`](./BOOTSTRAP_PROMPT.md) | Step 2 — paste into an AI chat |
+| [`BOOTSTRAP_PROMPT.md`](./BOOTSTRAP_PROMPT.md) | Step 2 — paste into an AI chat to generate project files |
+| [`STACK_PICKER_PROMPT.md`](./STACK_PICKER_PROMPT.md) | Step 4 — paste into an AI chat to pick + apply stacks and addons |
 | [`REMOTE_SETUP.md`](./REMOTE_SETUP.md) | You want the phone-only flow with no laptop |
-| [`STACKS_AND_ADDONS.md`](./STACKS_AND_ADDONS.md) | Step 4 — picking language + features |
+| [`STACKS_AND_ADDONS.md`](./STACKS_AND_ADDONS.md) | Step 4 — manual reference if not using the picker prompt |
 | [`docs/unattended-rules.md`](./docs/unattended-rules.md) | The agent's binding rulebook — don't edit casually |
 | [`SECURITY.md`](./SECURITY.md) | Vulnerability disclosure policy template |
 
