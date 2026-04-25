@@ -1,104 +1,129 @@
 # Stack and addon picker — paste this into any AI chat
 
-You are helping me apply the right language stacks and feature addons to a project I'm bootstrapping with the [headless agentic codebase](https://github.com/nkhdiscovery/headless-agentic-codebase) template. I've already done the bootstrap step (CLAUDE.md, product.md, architecture.md, phases.md, ADR 0001 are in the repo).
+You are helping me decide which language stacks and feature addons to use for a project I'm bootstrapping with the [headless agentic codebase](https://github.com/nkhdiscovery/headless-agentic-codebase) template.
 
-I am NOT a stack expert. Don't ask me which database driver or which test runner — make sensible choices for me and explain in one sentence each.
+I've already done the bootstrap step (CLAUDE.md, product.md, architecture.md, phases.md, ADR 0001 are filled in). Your job is to **decide** the stack — not to apply it. The agent will apply it on its first run.
 
-## Your job
+I am NOT a stack expert. Don't ask me about database drivers or test runners — make sensible choices and explain in one line each.
 
-Walk me through, in this order:
+## Your job (two phases)
 
-### Phase 1 — Pick (5–10 min)
+### Phase 1 — Decide (5 minutes)
 
-Ask me 4 short questions to figure out the right stacks and addons:
+Ask me 4 short questions:
 
-1. **What does the project do, in one sentence?** (Use to infer if it's backend/web/mobile/CLI/desktop/multi.)
+1. **What does the project do, in one sentence?**
 2. **Where does it run?** (User's laptop, our server, user's phone, embedded device, mix.)
-3. **Who uses it?** (End users — "consumers care about polish" / "developers tolerate rough edges" / "internal team only".)
-4. **What's the smallest valuable thing to ship first?** (Use to recommend cutting addons from the initial set.)
+3. **Who uses it?** (Consumers — care about polish / Developers — tolerate rough edges / Internal team only.)
+4. **What's the smallest valuable thing to ship first?**
 
 Then propose a **picked set** in this format:
 
 ```
-Stacks: <python | node | go | rust> [+ second if needed]
-Addons: <list of fastapi, nextjs, mobile-rn, mobile-native, desktop-tauri, cli-tool, openapi-clients>
+Stacks: <python | node | go | rust>[, <second if needed>]
+Addons: <comma-separated from: fastapi, nextjs, mobile-rn, mobile-native, desktop-tauri, cli-tool, openapi-clients>
 
 Why this set:
 - <one line per stack>
 - <one line per addon>
 
-What I deliberately left out:
+Deliberately left out:
 - <addon they might expect> — because <reason>
 ```
 
-Wait for me to confirm or push back. If I push back ("I want native iOS not RN"), revise once and re-confirm.
+Wait for me to confirm or push back. If I push back, revise once and re-confirm.
 
-### Phase 2 — Apply (15–20 min)
+### Phase 2 — Write the decision doc
 
-For the confirmed set, give me commands in this exact format:
+Once I confirm, produce **one file**: the contents of `docs/stack.md`.
 
+Format:
+
+```markdown
+# Stack and addons — apply on first agent run
+
+This file is read by the agent on its first cycle. After successful application,
+the agent will move this to `docs/stack-applied.md` so it doesn't re-run.
+
+## Decided
+
+**Stacks:** <list>
+**Addons:** <list>
+
+## Rationale
+
+<one line per stack>
+<one line per addon>
+<one line per deliberately-omitted addon>
+
+## Project metadata for templates
+
+These values fill in `{{PLACEHOLDERS}}` in the scaffold files:
+
+- PROJECT_NAME: <kebab-case name from the user>
+- PROJECT_DESCRIPTION: <one-line description>
+- PROJECT_PACKAGE: <python_package_name in snake_case, used as src/<package>/>
+- PROJECT_BUNDLE_ID: <reverse-domain bundle id for mobile, e.g. com.example.app>
+- SOURCE_ROOT: <root dir for code: src for most, frame for python projects, web for next.js, etc>
+- PRIMARY_EXT: <main file extension: py, ts, go, rs>
+
+## Apply instructions for the agent
+
+When you (the agent) see this file at the repo root on a cycle:
+
+1. Verify all stacks and addons listed exist in the repo's `stacks/` and `addons/` directories.
+2. For each picked stack:
+   a. Append `stacks/<n>/Dockerfile.snippet` to `docker/Dockerfile.dev`
+   b. Read `stacks/<n>/Makefile.snippet` and replace the placeholder `test`, `lint`, `format` targets in the root `Makefile` with its content
+   c. Copy `stacks/<n>/<manifest>.template` to repo root (e.g. `pyproject.toml.template` -> `pyproject.toml`), filling in placeholders
+3. For each picked addon:
+   a. Read `addons/<n>/README.md` for any addon-specific apply notes
+   b. Copy `addons/<n>/scaffold/` contents into the project at the location the README specifies
+   c. Append the addon's CLAUDE.md invariant block (from its README) to the project's `CLAUDE.md`
+   d. If the addon adds dependencies, merge them into `pyproject.toml` / `package.json` / `Cargo.toml` as appropriate
+4. Update `.github/workflows/ci.yml`:
+   - Set `DOCS_GATE_SOURCE_ROOT: <SOURCE_ROOT from above>`
+   - Set `DOCS_GATE_EXT: <PRIMARY_EXT from above>`
+   - Add stack-specific lint/test jobs if the stack provides a `ci.yml.snippet`
+5. Run `make build` then `make ci`. If anything fails, fix until green.
+6. Move this file to `docs/stack-applied.md` so subsequent cycles skip the apply.
+7. Commit as: `chore: apply stack (<stacks>) and addons (<addons>) per docs/stack.md`
+8. Open and self-merge the PR per the standard work loop.
+
+If any step fails:
+- Open an issue with `needs-decision` label describing the failure
+- Do NOT delete or modify `docs/stack.md` — leave it for human review
+- Move on to the next ready-for-agent issue
+
+## Daily commands cheat sheet (post-application)
+
+For the picked combination, the user will mostly run:
+
+<list 3-5 commands they'll use daily — `make daemon`, `make test`, `make agent-start`, etc>
+
+## First three issues to file
+
+Three concrete `ready-for-agent` issues sized for the picked stack:
+
+<3 issues with title, labels, body that get the agent moving on real work>
 ```
-## Step 1 of N — <human-readable name>
-**What this does:** One sentence.
-**Run this:**
-```bash
-<exact commands to copy-paste>
-```
-**Verify:**
-```bash
-<command to confirm it worked>
-```
-**Expected output:** <what success looks like>
-```
-
-Generate a step for each of:
-
-1. **Append Dockerfile snippets** — `cat stacks/<lang>/Dockerfile.snippet >> docker/Dockerfile.dev` for each picked stack. Show the actual snippets being appended (read them from the repo).
-
-2. **Replace Makefile targets** — show the exact `test`, `lint`, `format` lines from the picked stack's `Makefile.snippet` and tell me to paste them into the main `Makefile`, replacing the placeholder targets.
-
-3. **Copy stack starter files** — `pyproject.toml.template`, `package.json.template`, etc. with `{{PROJECT_NAME}}` and `{{PROJECT_DESCRIPTION}}` filled in based on what they told me in phase 1.
-
-4. **For each addon, copy scaffold + invariant block** — files from `addons/<addon>/scaffold/` into the project, plus the invariant block from the addon's README appended to `CLAUDE.md`.
-
-5. **Update CI docs-gate config** — set `DOCS_GATE_SOURCE_ROOT` and `DOCS_GATE_EXT` in `.github/workflows/ci.yml` to match the primary stack's source directory and extension.
-
-6. **Build and smoke test** — `make build && make ci`. If `make ci` fails, troubleshoot in chat.
-
-7. **Commit and push** — one commit per logical chunk:
-   - "chore: add <stack> stack"
-   - "chore: add <addon> addon"
-   - "ci: configure docs-gate for <stack>"
-
-### Phase 3 — Followup
-
-After everything's applied, give me a short cheat sheet for the chosen combination:
-
-- **Daily commands** they'll run most (`make test`, `make daemon`, `make agent-start`, etc.)
-- **Where to put new code** ("backend routes go in `src/<package>/<module>/routes.py`, mobile screens in `mobile/src/screens/`")
-- **First three issues to file with `ready-for-agent`** to get the agent moving on a meaningful first task
 
 ## Constraints
 
 - **No emojis.**
-- **Don't explain what a Dockerfile / Makefile is.** Assume they know basic dev concepts but don't know which stack to pick or how to wire it together.
-- **One step at a time.** Wait for my "ok" / "done" / paste of error output before moving to the next step.
-- **If a step fails, debug interactively.** Ask for the exact error, suggest one fix, retry. Don't dump multiple possible fixes at once.
-- **Default to the smallest viable set.** It's easier to add a stack later than rip one out.
-- **No new ADRs in this flow.** If a real architectural decision comes up, tell me to file an issue with `needs-decision` label after this is done — don't slow the apply step down with ADR drafting.
-
-## Default stack/addon choices (use unless they push back)
-
-- **Web app for end users** → `node` + `nextjs`
-- **Backend API** → `python` + `fastapi`
-- **Backend + web admin** → `python` + `node` + `fastapi` + `nextjs`
-- **Cross-platform mobile** → `node` + `mobile-rn`
-- **Premium-feel mobile (photo/video/games)** → `mobile-native`
-- **Mobile + backend** → add `openapi-clients`
-- **CLI tool** → `go` + `cli-tool` (or `rust` if they care about binary size)
-- **Desktop app** → `node` + `nextjs` + `rust` + `desktop-tauri`
-- **AI/ML/data project** → `python` (no addons unless they describe a service)
+- **One file output. No copy-paste commands for the human.** The agent reads the file, the agent applies.
+- **Pick the smallest viable set.** Easier to add a stack later than rip one out.
+- **Default choices** unless the user pushes back:
+  - Web app for end users → `node` + `nextjs`
+  - Backend API → `python` + `fastapi`
+  - Backend + admin web → `python` + `node` + `fastapi` + `nextjs`
+  - Cross-platform mobile → `node` + `mobile-rn`
+  - Premium-feel mobile (photo/video) → `mobile-native`
+  - Mobile + backend → add `openapi-clients`
+  - CLI tool → `go` + `cli-tool` (or `rust` if binary size matters)
+  - Desktop app → `node` + `nextjs` + `rust` + `desktop-tauri`
+  - AI/ML/data project → `python` only
 
 ## Start
 
-Ask me your four phase 1 questions. Then propose the stack/addon set.
+Ask me your four phase 1 questions.

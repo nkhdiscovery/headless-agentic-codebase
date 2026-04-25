@@ -58,19 +58,19 @@ Each file replaces a template stub or creates a new ADR. Use the commit message 
 
 ---
 
-## Step 4 — Pick and apply your stacks and addons (AI-assisted)
+## Step 4 — Decide your stacks and addons (AI writes the decision doc)
 
-**Where:** AI chat (Claude.ai or similar). Then your laptop for the apply commands.
+**Where:** AI chat. No commands to run.
 
-**What:** This step requires picking the right language toolchain and feature scaffolds, plus some Docker/Makefile/CI plumbing. Rather than learn it all yourself, paste [`STACK_PICKER_PROMPT.md`](./STACK_PICKER_PROMPT.md) into an AI chat and let it walk you through.
+**What:** Paste [`STACK_PICKER_PROMPT.md`](./STACK_PICKER_PROMPT.md) into an AI chat. It asks 4 questions about your project, proposes a stack + addon set, and on confirm writes one file: `docs/stack.md`.
 
-The prompt will:
+That's it. You commit `docs/stack.md` to your repo. The agent reads it on its first cycle and applies everything itself — Dockerfile snippets, Makefile targets, scaffold copies, CI config, build, smoke test. You never see the apply commands.
 
-1. **Phase 1 — Pick (5 min):** Ask 4 quick questions about your project, then propose a stack + addon set with one-line justifications. You confirm or push back.
-2. **Phase 2 — Apply (15 min):** Give you copy-paste commands for each step (append Dockerfile snippets, replace Makefile targets, copy scaffold files, update CI). One step at a time, with verification commands. If something fails, debug interactively.
-3. **Phase 3 — Cheat sheet:** Daily commands, where to put new code, first three `ready-for-agent` issues to file.
+The decision file also includes:
+- Daily commands cheat sheet for your picked combination
+- First three `ready-for-agent` issues to file (the agent will pick these up after applying the stack)
 
-If you'd rather pick manually, [`STACKS_AND_ADDONS.md`](./STACKS_AND_ADDONS.md) has the catalogue and common combinations.
+This step needs no laptop. You can do it entirely from your phone.
 
 **Common combinations** (picker will recommend something close to one of these):
 
@@ -82,7 +82,7 @@ If you'd rather pick manually, [`STACKS_AND_ADDONS.md`](./STACKS_AND_ADDONS.md) 
 | CLI tool | `go` + `cli-tool` |
 | AI/ML project | `python` only |
 
-This step needs a laptop with Docker. Not designed for phone.
+If you'd rather pick manually without the AI, [`STACKS_AND_ADDONS.md`](./STACKS_AND_ADDONS.md) has the full catalogue. Write your own `docs/stack.md` following the format the prompt would have produced.
 
 ---
 
@@ -123,11 +123,8 @@ cd <your-new-repo>
 # Edit agent.config or:
 # AGENT_RUNTIME=gemini
 
-make build              # build the dev container
-make ci                 # smoke test — should pass on a fresh template
-
-# Supervised trial — watch the first cycle
-make agent-start
+make build              # build the dev container (minimal — just the agent CLIs)
+make agent-start        # first cycle will apply your docs/stack.md
 ```
 
 In another terminal:
@@ -135,13 +132,19 @@ In another terminal:
 tail -f logs/daily/$(date +%Y-%m-%d).md
 ```
 
-Watch one full cycle: agent picks an issue → branches → plans → tests → implements → CI green → self-merges. If the merged PR looks reasonable:
+**The first cycle is special.** The agent sees `docs/stack.md`, applies it (Dockerfile snippets, Makefile targets, scaffold files, CI config), runs `make build && make ci` until green, moves the file to `docs/stack-applied.md`, commits, self-merges. This typically takes 5–15 minutes depending on which addons you picked.
+
+**Subsequent cycles** are normal: agent picks the highest-priority `ready-for-agent` issue (the picker prompt seeded 3 of these for you), branches, plans, tests, implements, self-merges.
+
+If the first cycle fails to apply the stack, the agent files an issue with `needs-decision` label and leaves `docs/stack.md` in place for you to fix manually. Most common failure: a stack/addon name in `docs/stack.md` doesn't match what's in the template repo (typo).
+
+When you've watched one full normal cycle complete cleanly:
 
 ```bash
 make agent-stop
 ```
 
-If it looks wrong, close the PR with a comment, tighten the issue's acceptance criteria, fix anything obviously broken in the docs, then trial again.
+If something looks wrong, close the PR with a comment, tighten acceptance criteria, fix anything obvious in the docs, then trial again.
 
 ---
 

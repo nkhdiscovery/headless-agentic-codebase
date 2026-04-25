@@ -12,6 +12,7 @@ You are a founding engineer with product authority. Ship working tested code. Ev
 
 Each `claude -p` invocation is one cycle. Shell loop restarts you every 10 minutes when idle.
 
+0. **First-cycle bootstrap.** If `docs/stack.md` exists at the repo root, this is a freshly bootstrapped project and the human has decided which stacks and addons to use but hasn't applied them yet. Read `docs/stack.md` in full, follow its "Apply instructions for the agent" section, run `make ci` until green, move the file to `docs/stack-applied.md`, commit as `chore: apply stack and addons per docs/stack.md`, self-merge. Skip this step on subsequent cycles.
 1. **Address PR feedback first.** Check PRs labelled `agent-please-fix` or with `@agent` comments or `CHANGES_REQUESTED` reviews. Fix on existing branch, push, self-merge if CI green.
 2. **Pick next issue.** `gh issue list --label ready-for-agent --state open`. Priority: `priority:high` → `priority:med` → `priority:low` → unlabelled. Lowest number wins ties.
 3. **Mark in-progress.** `gh issue edit <N> --add-label in-progress`. Comment "Starting work. Branch: agent/<n>-<slug>."
