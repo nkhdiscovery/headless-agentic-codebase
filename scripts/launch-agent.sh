@@ -120,7 +120,35 @@ $COMPOSE exec -T agent bash -lc "
         [ \"\$ready_count\" -gt 0 ] || [ \"\$fix_count\" -gt 0 ]
     }
 
+    under_daily_cap() {
+        bash scripts/agent-cost.sh under-cap
+    }
+
+    under_pr_cap() {
+        local cap=\"\${AGENT_MAX_PRS_PER_DAY:-0}\"
+        [ \"\$cap\" = \"0\" ] && return 0
+        local merged_today
+        merged_today=\$(gh pr list --state merged --search \"merged:\$(date +%Y-%m-%d) author:@me\" --json number 2>/dev/null | jq 'length' || echo 0)
+        if [ \"\$merged_today\" -ge \"\$cap\" ]; then
+            echo \"Daily PR cap reached: \$merged_today merged today >= \$cap\"
+            return 1
+        fi
+        return 0
+    }
+
     while true; do
+        # Guard rails — check before starting a cycle.
+        if ! under_daily_cap; then
+            echo \"[launcher] daily cost cap reached. Sleeping 1h then re-checking.\"
+            sleep 3600
+            continue
+        fi
+        if ! under_pr_cap; then
+            echo \"[launcher] daily PR merge cap reached. Sleeping 1h then re-checking.\"
+            sleep 3600
+            continue
+        fi
+
         git checkout main && git pull --rebase 2>&1 | tail -3 || true
         run_agent_cycle || echo '[launcher] cycle returned non-zero, continuing loop'
 

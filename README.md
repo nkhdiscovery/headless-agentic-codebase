@@ -380,6 +380,18 @@ In a **public repo**, anyone can open issues. The label is still your gate, but 
 
 The template repo itself (this one) is fine to keep public — there's no agent loop running on it; it's just files.
 
+## Cost controls
+
+The agent runs on your subscription or API quota. Three built-in layers protect you from runaway costs:
+
+- **Daily cost cap** — `AGENT_MAX_DAILY_USD=5` in `agent.config`. Launcher pauses for an hour when reached.
+- **Daily PR cap** — `AGENT_MAX_PRS_PER_DAY=20` for runaway loops.
+- **Per-PR cost comments** — every merged PR gets `Cost: $0.42 (approx)` posted automatically.
+
+Plus `make agent-cost` shows today's spend at a glance. See [`GETTING_STARTED.md`](./GETTING_STARTED.md#cost-controls-optional-but-recommended) for recommended values per subscription type and how to inspect spend.
+
+The agent also can't auto-merge changes to its own controls (Makefile, launcher, agent.config, unattended-rules.md, workflows). It labels those PRs `human-only-merge` and leaves them for you to review.
+
 ---
 
 ## Comparison

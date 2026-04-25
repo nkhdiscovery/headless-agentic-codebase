@@ -331,6 +331,62 @@ The default-private path is recommended for any project where you're shipping se
 
 ---
 
+## Cost controls (optional but recommended)
+
+The agent runs on your subscription/quota — Claude Pro, Gemini free tier, Codex API, etc. Without limits, a runaway loop (CI flake, edge-case bug, vague spec) can burn through quota or rack up API charges fast.
+
+Three layers of control are built in:
+
+**1. Daily cost cap** — set in `agent.config`:
+```bash
+AGENT_MAX_DAILY_USD=5      # stop the loop when today's estimated spend hits $5
+AGENT_MAX_DAILY_USD=0      # disabled (default)
+```
+Before each cycle, the launcher runs `scripts/agent-cost.sh under-cap`. If today's `.jsonl` log shows you're past the cap, the launcher sleeps an hour and re-checks. Resets at midnight local time.
+
+**2. Daily merge cap** — set in `agent.config`:
+```bash
+AGENT_MAX_PRS_PER_DAY=20   # stop after 20 merges
+AGENT_MAX_PRS_PER_DAY=0    # disabled (default)
+```
+Hard ceiling on how many PRs the agent can ship in 24h. Useful guard against "agent woke up and shipped 100 trivial PRs" scenarios.
+
+**3. Per-PR cost transparency** — every PR the agent merges gets a comment:
+> Cost: $0.42 (approx)
+
+So you can see at a glance which features were cheap and which were expensive. Visible from GitHub mobile.
+
+**Inspect spend at any time:**
+```bash
+make agent-cost                                          # today's tokens + cost
+bash scripts/agent-cost.sh total                         # all-time
+bash scripts/agent-cost.sh range 2026-04-20 2026-04-25   # custom range
+bash scripts/agent-cost.sh raw-today                     # JSON for piping
+```
+
+**Pricing source:** `scripts/agent-cost.sh` has hardcoded per-million-token rates per model (Opus, Sonnet, Haiku, Gemini Pro/Flash, GPT-5/Codex). Update them when prices change. Estimates are best-effort and may differ slightly from your provider's actual bill.
+
+**Other guard rails already in place:**
+
+- **Two-failure circuit-breaker** (`unattended-rules.md`): same CI failure twice in a row → agent stops on that issue, comments, moves on.
+- **Self-controls protected** (`unattended-rules.md` hard limit 8): agent cannot auto-merge changes to its own files (`agent.config`, launcher, rules, Makefile, workflows). Adds `human-only-merge` label and waits for you.
+- **Burst-when-busy / sleep-when-idle**: agent doesn't poll constantly when the queue's empty (default 10-min sleep).
+- **Container isolation**: agent has no GPU access, no access to your real data, restricted network.
+
+**Recommended first values:**
+
+| Subscription | `AGENT_MAX_DAILY_USD` | Why |
+|---|---|---|
+| Claude Pro (~$20/mo) | `2` | Pro caps hit fast; this protects most of the day's quota |
+| Claude Max (~$100/mo) | `15` | Max can sustain heavier daily use |
+| Claude API | `10` | Hard cost — set to whatever you can afford |
+| Gemini free tier | `0` (disabled) | Free, no need |
+| Codex API | `10` | Same as Claude API |
+
+After commiting to `agent.config`, restart the agent: `make agent-stop && make agent-start`.
+
+---
+
 ## How agent context and cadence work (worth understanding)
 
 **TL;DR: bursts through work, sleeps only when idle. Context is fresh per cycle. Files are the long-term memory.**

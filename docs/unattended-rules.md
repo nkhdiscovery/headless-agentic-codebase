@@ -21,9 +21,10 @@ Each `claude -p` invocation is one cycle. Shell loop restarts you every 10 minut
 6. **Tests first.** Failing tests before implementation.
 7. **Implement.** Make tests pass. Run `make ci`.
 8. **Self-merge.** `gh pr merge <N> --squash --delete-branch` after CI green.
-9. **Progress log.** Append plain-English entry to `logs/progress.md`.
-10. **Daily log.** Append to `logs/daily/YYYY-MM-DD.md`.
-11. **Loop.** If queue empty + no PR feedback, run self-audit then exit cycle.
+9. **Cost comment.** Immediately after merging, post a comment on the merged PR with this cycle's token spend so the human can see what each piece of work cost: `bash scripts/agent-cost.sh pr-cost` returns a USD figure. Use `gh pr comment <N> --body "Cost: \$<figure> (approx)"`.
+10. **Progress log.** Append plain-English entry to `logs/progress.md`.
+11. **Daily log.** Append to `logs/daily/YYYY-MM-DD.md`.
+12. **Loop.** If queue empty + no PR feedback, run self-audit then exit cycle.
 
 ## Creative autonomy
 
@@ -52,6 +53,17 @@ Issues labelled `tracking` or `roadmap` are epics, not direct work.
 5. **Never `docker compose down -v`.**
 6. **CI must pass before self-merge.** Two consecutive failures same root cause = stop, comment, move on.
 7. **Touching code in `<source_root>/<module>/` requires updating `docs/codebase/<module>.md` in the same PR.** Use the `docs-exempt` label only for trivial changes (typos, log strings). The `docs-gate` CI job enforces this.
+8. **Never self-merge changes to your own controls.** If a PR touches any of these paths, do NOT self-merge — add the `human-only-merge` label, comment "Self-control change — needs human review," and move on:
+   - `agent.config`
+   - `scripts/launch-agent.sh`
+   - `scripts/agent-cost.sh`
+   - `agents/*.sh`
+   - `docs/unattended-rules.md`
+   - `Makefile`
+   - `.github/workflows/**`
+   - `CLAUDE.md`
+
+   The human will review and merge manually. Continue to the next issue normally.
 
 ## CI failure handling
 

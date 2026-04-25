@@ -3,7 +3,7 @@
 # Customise test/lint/format targets per language.
 
 .PHONY: help build rebuild shell test lint format ci daemon \
-        agent-start agent-stop agent-logs clean fresh
+        agent-start agent-stop agent-logs agent-cost clean fresh
 
 # Project-scoped compose — derives a unique name from the repo directory so
 # multiple agent instances on the same host don't collide on image, container,
@@ -56,6 +56,9 @@ agent-stop:  ## Stop the agent cleanly
 
 agent-logs:  ## Tail today's log
 	@tail -f logs/daily/$$(date +%Y-%m-%d).md 2>/dev/null || echo "No log yet."
+
+agent-cost:  ## Show today's agent token spend
+	@bash scripts/agent-cost.sh today
 
 # --- Housekeeping ---
 clean:  ## Remove build artefacts
