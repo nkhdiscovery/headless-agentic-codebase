@@ -26,7 +26,7 @@ Pro plan: ~$20/month, fine for casual agent runs. Max plan: ~$100/month, recomme
 npm install -g @google/gemini-cli
 gemini auth   # browser flow
 ```
-Free tier is generous. Works well for many projects but the template's prompts are tuned to Claude.
+Free tier is generous. The template's workflow runs on Gemini identically — the adapter handles symlinking GEMINI.md to CLAUDE.md and the prompts are model-agnostic.
 
 **Codex CLI (OpenAI)**
 ```bash
@@ -150,33 +150,66 @@ The agent will replace the generic template README with a project-specific one d
 
 **Where:** Your laptop. Requires what you set up in Step 0 (Docker, gh CLI, agent CLI, Claude/Gemini/Codex auth).
 
-**Configure runtime and model** by editing `agent.config` in your repo:
-
+**Clone your repo:**
 ```bash
 git clone <your-new-repo>
 cd <your-new-repo>
-
-cat agent.config
 ```
 
-You should see something like:
+**Configure runtime and model** by editing `agent.config` in your repo. Open the file and find the two lines starting with `AGENT_RUNTIME=` and `AGENT_MODEL=`.
+
+**If using Claude Code (default — no changes needed):**
 ```bash
 AGENT_RUNTIME="${AGENT_RUNTIME:-claude}"
 AGENT_MODEL="${AGENT_MODEL:-default}"
-AGENT_IDLE_SLEEP="${AGENT_IDLE_SLEEP:-600}"
+```
+This runs Opus 4.7 (the most capable, recommended for autonomous work). To save quota on Claude Pro, change to:
+```bash
+AGENT_MODEL="${AGENT_MODEL:-sonnet}"
 ```
 
-**Decide model based on your subscription:**
+**If using Gemini CLI:**
+```bash
+AGENT_RUNTIME="${AGENT_RUNTIME:-gemini}"
+AGENT_MODEL="${AGENT_MODEL:-default}"
+```
+Default is Gemini 2.5 Pro. For faster/cheaper, change `default` to `flash`.
 
-| Runtime | Best (24/7 work) | Cheap (rapid iteration) |
+**If using Codex CLI:**
+```bash
+AGENT_RUNTIME="${AGENT_RUNTIME:-codex}"
+AGENT_MODEL="${AGENT_MODEL:-default}"
+```
+Default is gpt-5-codex.
+
+**Reference — what `AGENT_MODEL` accepts per runtime:**
+
+| Runtime | Values | Maps to |
 |---|---|---|
-| Claude Code | `claude-opus-4-7` (default) | `claude-sonnet-4-6` |
-| Gemini CLI | `gemini-2.5-pro` | `gemini-2.5-flash` |
-| Codex CLI | `gpt-5-codex` | `gpt-5` |
+| claude | `default` or `opus` | claude-opus-4-7 |
+| claude | `sonnet` or `fast` | claude-sonnet-4-6 |
+| claude | `haiku` or `cheapest` | claude-haiku-4-5 |
+| gemini | `default` or `pro` | gemini-2.5-pro |
+| gemini | `flash` or `fast` | gemini-2.5-flash |
+| codex | `default` or `codex` | gpt-5-codex |
+| codex | `gpt-5` | gpt-5 |
 
-For Claude Pro plan or paid-by-token API: use Sonnet (much cheaper, still capable). For Claude Max or free Gemini tier: use the flagship.
+You can also set an exact model name as the value (e.g. `AGENT_MODEL="claude-opus-4-7"`) — the adapter passes unknown values through.
 
-Edit `agent.config` to set your choice (e.g. `AGENT_MODEL="sonnet"`), commit, push.
+**Recommendation by subscription:**
+
+- Claude Pro (~$20/mo) → use `sonnet` to stretch your usage
+- Claude Max (~$100/mo) → use `default` (Opus), what it's for
+- Claude API (pay per token) → `sonnet` for most work, `opus` for hard architecture
+- Gemini free tier → `default` (Pro), free tier is generous
+- Codex with ChatGPT Plus/Pro → `default` (gpt-5-codex)
+
+After editing, commit and push:
+```bash
+git add agent.config
+git commit -m "chore: configure agent runtime and model"
+git push
+```
 
 **Build and run supervised trial:**
 
