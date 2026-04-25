@@ -107,27 +107,7 @@ Then file the 5–8 starter issues from step 2. Each gets `ready-for-agent` + a 
 
 **Set spending limit to $0** in GitHub Settings → Billing → Spending limits → Actions, so CI minutes can never bill you.
 
----
-
-## Step 5.5 — Replace the template README with a project-specific one
-
-**Where:** AI chat or your editor.
-
-**What:** The repo currently has the generic template README. Replace it with one that describes *your* project — what it does, how to install/run, contributing, license.
-
-Easiest: paste this prompt into an AI chat:
-
-> Read these files in my repo `<github-org/repo>`:
-> - `CLAUDE.md`
-> - `docs/product.md`
-> - `docs/architecture.md`
-> - `docs/stack.md` (or `docs/stack-applied.md` if the agent has already applied)
->
-> Write a concise project README.md based on what you find. Sections: one-line pitch, what it does (2 paragraphs), tech stack, quick start (clone + install + run), how the agent works on this project (link to GETTING_STARTED.md and CLAUDE.md), license. No marketing fluff. No emojis. ~200-400 words.
-
-Commit the new README via GitHub mobile or your editor. The old template README stays available at the original template repo for anyone who needs it.
-
-**Skip this step if** your project is private and you don't care what the README says — the agent will eventually file its own `agent-proposed` issue to fix it during a self-audit cycle anyway.
+The agent will replace the generic template README with a project-specific one during its first cycle (alongside applying the stack), so you don't need to write one yourself.
 
 ---
 
