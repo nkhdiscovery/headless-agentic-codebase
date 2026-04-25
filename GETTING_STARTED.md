@@ -145,6 +145,7 @@ If you'd rather pick manually without the AI, [`STACKS_AND_ADDONS.md`](./STACKS_
 for l in "ready-for-agent:0e8a16" "agent-produced:1f77b4" "agent-please-fix:d93f0b" \
          "agent-proposed:5319e7" "needs-decision:d93f0b" "in-progress:0075ca" \
          "blocked:b60205" "human-only:000000" "human-takeover:000000" \
+         "human-only-merge:000000" "high-cost:e99695" \
          "tracking:fef2c0" "roadmap:fef2c0" "docs-exempt:c5def5" \
          "priority:high:b60205" "priority:med:fbca04" "priority:low:c2e0c6"; do
   gh label create "${l%:*}" --color "${l##*:}" --force
@@ -351,10 +352,17 @@ AGENT_MAX_PRS_PER_DAY=0    # disabled (default)
 ```
 Hard ceiling on how many PRs the agent can ship in 24h. Useful guard against "agent woke up and shipped 100 trivial PRs" scenarios.
 
-**3. Per-PR cost transparency** — every PR the agent merges gets a comment:
-> Cost: $0.42 (approx)
+**3. Per-PR cost transparency** — every PR the agent merges (or pushes commits to) gets a comment after each cycle:
+> Cycle cost: $0.42. Total on this PR: $1.18.
 
 So you can see at a glance which features were cheap and which were expensive. Visible from GitHub mobile.
+
+**4. High-cost PR warning** — set in `agent.config`:
+```bash
+AGENT_PR_COST_WARN_USD=2     # warn when cumulative cost on a PR exceeds $2
+AGENT_PR_COST_WARN_USD=0     # disabled (default)
+```
+When the running total on a PR exceeds this, the agent labels the PR `high-cost` and posts a comment with options for you (let it continue / take over / abandon / re-scope / pause all). One warning per PR — the label is the gate. The agent doesn't stop on its own; you decide.
 
 **Inspect spend at any time:**
 ```bash

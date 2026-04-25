@@ -188,14 +188,43 @@ cmd_pr_cost() {
     rm -f "$tmp"
 }
 
+cmd_pr_total() {
+    # Sum all "Cycle cost: $X.XX" comments already on the given PR plus
+    # this cycle's pr-cost. Returns total USD as a decimal string.
+    local pr_num="$1"
+    if [ -z "$pr_num" ]; then
+        echo "Usage: $0 pr-total <pr-number>" >&2
+        return 2
+    fi
+
+    local prior
+    prior=$(gh pr view "$pr_num" --json comments --jq \
+        '.comments[].body | capture("Cycle cost: \\$(?<n>[0-9.]+)") | .n' 2>/dev/null \
+        | awk 'BEGIN{s=0} {s+=$1} END{printf "%.4f\n", s}')
+    [ -z "$prior" ] && prior="0"
+
+    local current
+    current=$(cmd_pr_cost)
+    [ -z "$current" ] && current="0"
+
+    awk -v p="$prior" -v c="$current" 'BEGIN { printf "%.2f\n", p + c }'
+}
+
+cmd_pr_warn_threshold() {
+    # Echoes the threshold (or empty if disabled).
+    echo "${AGENT_PR_COST_WARN_USD:-0}"
+}
+
 case "${1:-today}" in
-    today)        cmd_today ;;
-    total)        cmd_total ;;
-    range)        cmd_range "$2" "$3" ;;
-    raw-today)    cmd_raw_today ;;
-    under-cap)    cmd_under_cap ;;
-    pr-cost)      cmd_pr_cost ;;
+    today)             cmd_today ;;
+    total)             cmd_total ;;
+    range)             cmd_range "$2" "$3" ;;
+    raw-today)         cmd_raw_today ;;
+    under-cap)         cmd_under_cap ;;
+    pr-cost)           cmd_pr_cost ;;
+    pr-total)          cmd_pr_total "$2" ;;
+    pr-warn-threshold) cmd_pr_warn_threshold ;;
     *)
-        echo "Usage: $0 {today|total|range FROM TO|raw-today|under-cap|pr-cost}" >&2
+        echo "Usage: $0 {today|total|range FROM TO|raw-today|under-cap|pr-cost|pr-total <N>|pr-warn-threshold}" >&2
         exit 2 ;;
 esac

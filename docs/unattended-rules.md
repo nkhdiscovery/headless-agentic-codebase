@@ -10,21 +10,45 @@ You are a founding engineer with product authority. Ship working tested code. Ev
 
 ## The work loop
 
-Each `claude -p` invocation is one cycle. Shell loop restarts you every 10 minutes when idle.
+**One cycle = one work package.** Each `claude -p` invocation handles exactly one PR or one issue end-to-end, then exits. The launcher restarts you immediately if there's more work, or sleeps if the queue is idle. This keeps each cycle's context small, makes the cost-per-PR figure meaningful, and isolates failures.
 
-0. **First-cycle bootstrap.** If `docs/stack.md` exists at the repo root, this is a freshly bootstrapped project and the human has decided which stacks and addons to use but hasn't applied them yet. Read `docs/stack.md` in full, follow its "Apply instructions for the agent" section, run `make ci` until green, move the file to `docs/stack-applied.md`. Then check the repo's `README.md` — if it still contains template boilerplate (e.g. "Agent Project Pack", "drop-in template", "headless agentic codebase"), replace it with a project-specific README based on `CLAUDE.md`, `docs/product.md`, `docs/architecture.md`, and `docs/stack-applied.md`. Sections: one-line pitch, what it does (2 paragraphs), tech stack, quick start (clone + install + run), how the agent works on this project (link to GETTING_STARTED.md and CLAUDE.md), license. No marketing fluff, no emojis, 200-400 words. Commit everything as `chore: apply stack, addons, and project README per docs/stack.md`, self-merge. Skip this entire step on subsequent cycles.
-1. **Address PR feedback first.** Check PRs labelled `agent-please-fix` or with `@agent` comments or `CHANGES_REQUESTED` reviews. Fix on existing branch, push, self-merge if CI green.
-2. **Pick next issue.** `gh issue list --label ready-for-agent --state open`. Priority: `priority:high` → `priority:med` → `priority:low` → unlabelled. Lowest number wins ties.
-3. **Mark in-progress.** `gh issue edit <N> --add-label in-progress`. Comment "Starting work. Branch: agent/<n>-<slug>."
-4. **Branch.** `git checkout main && git pull && git checkout -b agent/<n>-<slug>`.
-5. **Plan.** Write `plans/<n>-<slug>.md`: problem, approach, files, risks.
-6. **Tests first.** Failing tests before implementation.
-7. **Implement.** Make tests pass. Run `make ci`.
-8. **Self-merge.** `gh pr merge <N> --squash --delete-branch` after CI green.
-9. **Cost comment.** Immediately after merging, post a comment on the merged PR with this cycle's token spend so the human can see what each piece of work cost: `bash scripts/agent-cost.sh pr-cost` returns a USD figure. Use `gh pr comment <N> --body "Cost: \$<figure> (approx)"`.
-10. **Progress log.** Append plain-English entry to `logs/progress.md`.
-11. **Daily log.** Append to `logs/daily/YYYY-MM-DD.md`.
-12. **Loop.** If queue empty + no PR feedback, run self-audit then exit cycle.
+0. **First-cycle bootstrap.** If `docs/stack.md` exists at the repo root, this is a freshly bootstrapped project and the human has decided which stacks and addons to use but hasn't applied them yet. Read `docs/stack.md` in full, follow its "Apply instructions for the agent" section, run `make ci` until green, move the file to `docs/stack-applied.md`. Then check the repo's `README.md` — if it still contains template boilerplate (e.g. "Agent Project Pack", "drop-in template", "headless agentic codebase"), replace it with a project-specific README based on `CLAUDE.md`, `docs/product.md`, `docs/architecture.md`, and `docs/stack-applied.md`. Sections: one-line pitch, what it does (2 paragraphs), tech stack, quick start (clone + install + run), how the agent works on this project (link to GETTING_STARTED.md and CLAUDE.md), license. No marketing fluff, no emojis, 200-400 words. Commit everything as `chore: apply stack, addons, and project README per docs/stack.md`, self-merge. This counts as your one work package — exit after.
+
+### Pick exactly one of (A), (B), or (C) per cycle
+
+**(A) PR feedback** — if any open PR has the `agent-please-fix` label, an `@agent` comment, or a `CHANGES_REQUESTED` review:
+
+1. Pick the oldest such PR.
+2. Address the feedback on the existing branch.
+3. Push, get CI green (max 5 runs total, see CI failure handling below).
+4. Self-merge if appropriate, or hand off via `human-only-merge` / `needs-decision` if blocked.
+5. Post cycle cost comment per "Cost transparency on PRs" section below.
+6. Log progress, exit.
+
+**(B) New work** — otherwise, if there are `ready-for-agent` issues open:
+
+1. Pick the highest-priority issue (`priority:high` → `med` → `low` → unlabelled; lowest issue number wins ties).
+2. Add `in-progress` label, comment "Starting work. Branch: agent/<n>-<slug>."
+3. Branch: `git checkout main && git pull && git checkout -b agent/<n>-<slug>`.
+4. Plan: write `plans/<n>-<slug>.md` with problem, approach, files, risks.
+5. Tests first: failing tests before implementation.
+6. Implement, run `make ci`.
+7. Push, open PR, address CI failures (max 5 runs total).
+8. Self-merge: `gh pr merge <N> --squash --delete-branch` after CI green.
+9. Post cycle cost comment per "Cost transparency on PRs" section below.
+10. Append plain-English entry to `logs/progress.md`.
+11. Append technical entry to `logs/daily/YYYY-MM-DD.md`.
+12. Exit.
+
+**(C) Self-audit** — otherwise (queue empty, no PR feedback):
+
+1. Briefly review recent merges, the issue list, and `logs/progress.md`.
+2. If you spot a real gap (missing tests, broken-window code, undocumented module), file at most ONE issue with `agent-proposed` label and exit.
+3. Otherwise just exit.
+
+### Hard rule: do not chain work packages
+
+Even if (A) finishes quickly and (B) has work waiting, do not start (B) in the same cycle. Exit. The launcher will start a fresh cycle for the next work package within seconds when the queue is non-empty (burst mode). Chaining bloats context and muddles cost attribution.
 
 ## Creative autonomy
 
@@ -71,6 +95,45 @@ Issues labelled `tracking` or `roadmap` are epics, not direct work.
 - Same root cause twice: stop, comment with logs, move on.
 - Different root cause: treat as first failure for new cause.
 - **Total of 5 CI runs on the same branch regardless of root cause:** stop, comment with a summary of what was tried, label the PR `needs-decision`, move on. Five attempts is enough — if it isn't merging, the issue is under-specified or the architecture is fighting the change.
+
+## Cost transparency on PRs
+
+After each cycle that pushed commits to a PR (either iterating on feedback or opening a new one), post a comment with that cycle's spend so the human can see incremental cost. Use the helper script:
+
+```bash
+CYCLE=$(bash scripts/agent-cost.sh pr-cost)
+TOTAL=$(bash scripts/agent-cost.sh pr-total <PR_NUMBER>)
+gh pr comment <PR_NUMBER> --body "Cycle cost: \$${CYCLE}. Total on this PR: \$${TOTAL}."
+```
+
+`pr-cost` reports this cycle's spend. `pr-total` reads existing `Cycle cost:` comments on the PR and adds this cycle, returning a running total.
+
+**High-cost warning.** After posting the cycle cost, check the threshold:
+
+```bash
+THRESHOLD=$(bash scripts/agent-cost.sh pr-warn-threshold)
+```
+
+If `THRESHOLD` is non-zero AND `TOTAL >= THRESHOLD` AND the PR doesn't already have the `high-cost` label:
+
+1. Add the `high-cost` label: `gh pr edit <PR_NUMBER> --add-label high-cost`.
+2. Post a one-time warning comment:
+
+```
+⚠️ This PR has accumulated $<TOTAL> in agent work, exceeding the AGENT_PR_COST_WARN_USD threshold of $<THRESHOLD>.
+
+Options to control this PR:
+- **Let it continue** — no action needed, agent keeps trying
+- **Take over** — add `human-takeover` label, agent stops on this PR
+- **Abandon** — close the PR; the related issue stays open and unlabelled until you re-queue it
+- **Re-scope** — comment `@agent <new direction>` and add `agent-please-fix`
+- **Pause all agent work** — `make agent-stop` on the host
+
+Continuing without action.
+```
+
+3. Do NOT post this warning more than once per PR — the `high-cost` label is the gate.
+4. Continue working on the PR — the warning is informational only. The agent does not stop on its own; the human decides.
 
 ## Time-bounded issues
 
