@@ -372,6 +372,16 @@ Everything else (slash commands, governance docs, launcher) stays as-is.
 
 ---
 
+## Safety: private vs public project repos
+
+The agent only acts on issues labelled `ready-for-agent`. In a **private repo**, only you can apply that label, so you're safe by default.
+
+In a **public repo**, anyone can open issues. The label is still your gate, but you need a workflow that auto-strips `ready-for-agent` and `agent-please-fix` from any contribution that isn't yours, otherwise external contributors could queue work directly. See [`GETTING_STARTED.md`](./GETTING_STARTED.md#going-public-with-a-project-repo-safety) for the workflow YAML and the full checklist (don't store production secrets in the agent container, monitor logs in week one, etc.).
+
+The template repo itself (this one) is fine to keep public — there's no agent loop running on it; it's just files.
+
+---
+
 ## Comparison
 
 | | This template | Devin / similar SaaS | Plain agent CLI |
