@@ -83,11 +83,24 @@ $COMPOSE exec -T agent bash -lc "
     check_agent_installed
     check_agent_authed
 
+    has_work() {
+        # Returns 0 if there's ready-for-agent work or PRs needing fixes.
+        local ready_count fix_count
+        ready_count=\$(gh issue list --label ready-for-agent --state open --json number 2>/dev/null | jq 'length' || echo 0)
+        fix_count=\$(gh pr list --label agent-please-fix --state open --json number 2>/dev/null | jq 'length' || echo 0)
+        [ \"\$ready_count\" -gt 0 ] || [ \"\$fix_count\" -gt 0 ]
+    }
+
     while true; do
         git checkout main && git pull --rebase 2>&1 | tail -3 || true
         run_agent_cycle || echo '[launcher] cycle returned non-zero, continuing loop'
-        echo \"[launcher] cycle complete — sleeping \${AGENT_IDLE_SLEEP}s\"
-        sleep \"\${AGENT_IDLE_SLEEP}\"
+
+        if has_work; then
+            echo \"[launcher] cycle complete — work pending, starting next cycle immediately\"
+        else
+            echo \"[launcher] cycle complete — queue empty, sleeping \${AGENT_IDLE_SLEEP}s\"
+            sleep \"\${AGENT_IDLE_SLEEP}\"
+        fi
     done
 " 2>&1 | tee -a "$LOG_FILE"
 

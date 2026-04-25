@@ -263,11 +263,33 @@ The agent reads GitHub fresh every cycle, so anything you change reaches it with
 
 ---
 
-## How agent context works (worth understanding)
+## How agent context and cadence work (worth understanding)
 
-**TL;DR: context is fresh every 10 minutes. Files are the long-term memory.**
+**TL;DR: bursts through work, sleeps only when idle. Context is fresh per cycle. Files are the long-term memory.**
 
-The launcher runs the agent CLI (`claude -p ...` or equivalent) in a `while true` loop. **Each loop iteration starts a brand-new context.** When the cycle finishes (PR merged, queue checked, etc.), the context is discarded. 10 minutes later, a fresh cycle reads `CLAUDE.md` and the relevant docs from scratch.
+### Cycle cadence
+
+The launcher runs the agent CLI (`claude -p ...` or equivalent) in a `while true` loop:
+
+1. Run one agent cycle (picks up an issue, plans, codes, opens PR, self-merges)
+2. Cycle exits — could be 30 seconds (queue check), could be an hour (complex feature)
+3. Check if there's more work: any `ready-for-agent` issues open? any `agent-please-fix` PRs? If yes, **start the next cycle immediately** (burst mode)
+4. If no work pending, sleep `AGENT_IDLE_SLEEP` seconds (default 600 = 10 min) and try again
+
+This means the agent races through your queue when there's work, and only paces itself when waiting for you to file new issues. You won't see a 10-minute gap between PRs unless you've stopped feeding it work.
+
+Configure in `agent.config`:
+
+```bash
+AGENT_IDLE_SLEEP=600    # default: 10 min between empty-queue checks
+AGENT_IDLE_SLEEP=60     # check every minute (more responsive, slightly more API quota)
+AGENT_IDLE_SLEEP=1800   # check every 30 min (calmer, saves quota)
+AGENT_IDLE_SLEEP=0      # never sleep — poll constantly (rarely worth it)
+```
+
+### Context
+
+**Each loop iteration starts a fresh context.** When the cycle finishes (PR merged, queue checked, etc.), the conversation context is discarded. The next cycle reads `CLAUDE.md` and the relevant docs from scratch.
 
 This means:
 
@@ -306,6 +328,13 @@ The only thing that grows over time is `logs/daily/` (one file per day). After m
 ---
 
 ## When something goes wrong
+
+**Container missing the agent CLI ("claude CLI not found")**
+Your Docker image was built before the agent CLI install was added (or with a stale cache). Force a clean rebuild:
+```bash
+make fresh        # clean + rebuild without cache
+make agent-start
+```
 
 **Agent opened a terrible PR**
 Close it, comment why, remove `ready-for-agent` from the issue. Agent will skip it.
