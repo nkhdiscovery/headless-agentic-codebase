@@ -1,0 +1,32 @@
+# Code owners — security-sensitive paths require review.
+#
+# When the agent self-merges a PR, GitHub still allows it without owner
+# approval on private repos without branch protection. CODEOWNERS becomes
+# binding once you add branch protection (paid plans) or once a paying
+# customer/contributor cares.
+#
+# Until then, this file documents WHICH paths are sensitive even if it
+# doesn't yet enforce review. The agent reads CODEOWNERS and treats
+# matching paths as "human-only" zones.
+
+# --- Examples to adapt per project -----------------------------------------
+
+# Authentication and tokens
+# src/auth/*                     @your-handle
+# src/pair/*                     @your-handle
+
+# Billing / payments
+# src/billing/*                  @your-handle
+
+# Module loader / plugin system (changes here re-route every module)
+# src/core/loader.py             @your-handle
+
+# Logging redaction (single point of credential leakage)
+# src/logging/*                  @your-handle
+
+# CI workflows (changes here can disable the safety gates)
+# .github/workflows/*            @your-handle
+
+# Secrets and configuration templates
+# .env.example                   @your-handle
+# docker/Dockerfile.*            @your-handle

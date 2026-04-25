@@ -1,0 +1,9 @@
+# --- Go toolchain ----------------------------------------------------------
+USER root
+RUN curl -fsSL https://go.dev/dl/go1.22.0.linux-amd64.tar.gz \
+    | tar -C /usr/local -xz \
+    && ln -s /usr/local/go/bin/go /usr/local/bin/go \
+    && ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+USER agent
+RUN go install honnef.co/go/tools/cmd/staticcheck@latest
+ENV PATH="/home/agent/go/bin:${PATH}"

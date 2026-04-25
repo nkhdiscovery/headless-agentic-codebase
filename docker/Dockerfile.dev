@@ -1,0 +1,57 @@
+# syntax=docker/dockerfile:1.7
+# Minimal dev container — language-agnostic.
+#
+# Includes: git, gh CLI, jq, curl, agent CLIs (claude/gemini/codex), Node.js
+# (because most agent CLIs are npm packages and most repos need it for tooling).
+#
+# To add a language toolchain, append the FROM block from stacks/<lang>/Dockerfile.snippet
+# or layer your own image FROM agent-dev:latest.
+
+FROM ubuntu:22.04 AS base
+
+ARG USER_UID=1000
+ARG USER_GID=1000
+ARG USERNAME=agent
+ARG INSTALL_AGENTS="claude gemini codex"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        curl \
+        wget \
+        ca-certificates \
+        gnupg \
+        nodejs \
+        npm \
+        make \
+        jq \
+        bash \
+    && rm -rf /var/lib/apt/lists/*
+
+# GitHub CLI
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+        | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+        > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/*
+
+# Agent CLIs
+RUN for agent in $INSTALL_AGENTS; do \
+        case "$agent" in \
+            claude)  npm install -g @anthropic-ai/claude-code ;; \
+            gemini)  npm install -g @google/gemini-cli ;; \
+            codex)   npm install -g @openai/codex ;; \
+            *)       echo "Unknown agent: $agent (skipping)" ;; \
+        esac \
+    done
+
+RUN groupadd --gid ${USER_GID} ${USERNAME} \
+    && useradd --uid ${USER_UID} --gid ${USER_GID} --create-home --shell /bin/bash ${USERNAME}
+
+WORKDIR /workspace
+USER ${USERNAME}
+
+CMD ["/bin/bash"]

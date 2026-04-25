@@ -1,0 +1,8 @@
+test:  ## cargo test
+	$(COMPOSE) run --rm dev cargo test
+
+lint:  ## clippy + fmt check
+	$(COMPOSE) run --rm dev sh -c "cargo clippy -- -D warnings && cargo fmt --check"
+
+format:  ## cargo fmt
+	$(COMPOSE) run --rm dev cargo fmt

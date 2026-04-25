@@ -1,0 +1,8 @@
+test:  ## Run go test
+	$(COMPOSE) run --rm dev go test ./...
+
+lint:  ## go vet + staticcheck
+	$(COMPOSE) run --rm dev sh -c "go vet ./... && staticcheck ./..."
+
+format:  ## gofmt
+	$(COMPOSE) run --rm dev gofmt -w .

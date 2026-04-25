@@ -1,0 +1,43 @@
+# Generic agent setup. Same image runs all runtimes.
+
+services:
+
+  dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+      args:
+        USER_UID: "${UID:-1000}"
+        USER_GID: "${GID:-1000}"
+        # Limit which CLIs are installed at build time:
+        # INSTALL_AGENTS: "claude"
+    image: agent-dev:latest
+    volumes:
+      - ..:/workspace:cached
+      # GitHub auth (all runtimes need this)
+      - ${HOME}/.config/gh:/home/agent/.config/gh
+      - ${HOME}/.gitconfig:/home/agent/.gitconfig:ro
+      # Per-runtime auth — only the active one is used; others harmless if absent
+      - ${HOME}/.claude:/home/agent/.claude
+      - ${HOME}/.claude.json:/home/agent/.claude.json
+      - ${HOME}/.gemini:/home/agent/.gemini
+      - ${HOME}/.codex:/home/agent/.codex
+    working_dir: /workspace
+    tty: true
+    stdin_open: true
+    command: /bin/bash
+
+  test:
+    extends: dev
+    command: make test
+
+  lint:
+    extends: dev
+    command: make lint
+
+  agent:
+    extends: dev
+    environment:
+      CLAUDE_UNATTENDED: "1"
+      AGENT_UNATTENDED: "1"
+    command: /bin/bash

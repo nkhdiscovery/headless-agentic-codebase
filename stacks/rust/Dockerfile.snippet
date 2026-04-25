@@ -1,0 +1,5 @@
+# --- Rust toolchain --------------------------------------------------------
+USER agent
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+ENV PATH="/home/agent/.cargo/bin:${PATH}"
+RUN rustup component add clippy rustfmt

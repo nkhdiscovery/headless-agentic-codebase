@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "{{PROJECT_NAME}}",
+    "slug": "{{PROJECT_NAME}}",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.example.{{PROJECT_NAME}}"
+    },
+    "android": {
+      "package": "com.example.{{PROJECT_NAME}}",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

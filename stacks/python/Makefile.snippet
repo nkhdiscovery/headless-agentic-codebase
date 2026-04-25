@@ -1,0 +1,10 @@
+# Python Makefile targets — replace the placeholders in your main Makefile.
+
+test:  ## Run pytest
+	$(COMPOSE) run --rm dev sh -c "pip install -e '.[dev]' >/dev/null 2>&1 && pytest -ra --cov"
+
+lint:  ## ruff + mypy
+	$(COMPOSE) run --rm dev sh -c "pip install -e '.[dev]' >/dev/null 2>&1 && ruff check . && ruff format --check . && mypy src"
+
+format:  ## Auto-format with ruff
+	$(COMPOSE) run --rm dev sh -c "pip install -e '.[dev]' >/dev/null 2>&1 && ruff format . && ruff check --fix ."

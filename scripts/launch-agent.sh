@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# scripts/launch-agent.sh
+#
+# Runtime-agnostic agent launcher. Reads agent.config to decide which
+# runtime adapter to use (Claude / Gemini / Codex / custom).
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+
+# --- Load config -----------------------------------------------------------
+
+if [ -f agent.config ]; then
+    # shellcheck disable=SC1091
+    source agent.config
+else
+    echo "ERROR: agent.config not found in $REPO_ROOT"
+    exit 1
+fi
+
+ADAPTER="agents/${AGENT_RUNTIME}.sh"
+if [ ! -f "$ADAPTER" ]; then
+    echo "ERROR: no adapter for AGENT_RUNTIME=$AGENT_RUNTIME"
+    echo "Available: $(ls agents/*.sh 2>/dev/null | xargs -n1 basename | sed 's/\.sh$//' | tr '\n' ' ')"
+    exit 1
+fi
+
+# --- Safety checks ---------------------------------------------------------
+
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$CURRENT_BRANCH" != "main" ]; then
+    echo "ERROR: you are on branch '$CURRENT_BRANCH', not main."
+    echo "Switch to main: git checkout main"
+    exit 1
+fi
+
+if ! git diff --quiet HEAD; then
+    echo "ERROR: uncommitted changes. Commit or stash first:"
+    git status --short
+    exit 1
+fi
+
+# --- Place the unattended marker ------------------------------------------
+
+mkdir -p .claude logs/daily
+touch .claude/unattended
+
+# --- Boot the agent container ---------------------------------------------
+
+echo "Starting agent container..."
+docker compose -f docker/docker-compose.yml up -d agent
+sleep 2
+
+LOG_FILE="logs/daily/$(date +%Y-%m-%d).md"
+{
+    echo ""
+    echo "## Session $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo ""
+    echo "- Runtime: $AGENT_RUNTIME"
+    echo "- Model: ${AGENT_MODEL:-default}"
+    echo ""
+} >> "$LOG_FILE"
+
+# --- Run the loop inside the container ------------------------------------
+
+echo "Launching agent (runtime: $AGENT_RUNTIME, model: ${AGENT_MODEL:-default})"
+echo "Live log: tail -f $LOG_FILE"
+echo "Stop anytime: make agent-stop"
+echo ""
+
+docker compose -f docker/docker-compose.yml exec -T agent bash -lc "
+    set -euo pipefail
+    cd /workspace
+    source agent.config
+    source agents/\${AGENT_RUNTIME}.sh
+
+    check_agent_installed
+    check_agent_authed
+
+    while true; do
+        git checkout main && git pull --rebase 2>&1 | tail -3 || true
+        run_agent_cycle || echo '[launcher] cycle returned non-zero, continuing loop'
+        echo \"[launcher] cycle complete — sleeping \${AGENT_IDLE_SLEEP}s\"
+        sleep \"\${AGENT_IDLE_SLEEP}\"
+    done
+" 2>&1 | tee -a "$LOG_FILE"
+
+# --- Post-session cleanup --------------------------------------------------
+
+echo "" >> "$LOG_FILE"
+echo "Session ended: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$LOG_FILE"
+
+rm -f .claude/unattended
+docker compose -f docker/docker-compose.yml stop agent
+
+echo "Agent stopped. See $LOG_FILE."

@@ -1,0 +1,42 @@
+# Build artefacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+node_modules/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+
+# Environments
+.venv/
+venv/
+.env
+.env.local
+.env.*.local
+
+# Local dev data
+.data/
+.cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Claude agent state
+.claude/cache/
+.claude/sessions/
+.claude/unattended
+
+# Plans are ephemeral
+plans/*.md
+!plans/.gitkeep
+
+# Daily logs are kept; only .gitkeep guards directory
+logs/daily/*.md
+!logs/daily/.gitkeep

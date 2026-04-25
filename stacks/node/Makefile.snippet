@@ -1,0 +1,10 @@
+# Node/TS Makefile targets
+
+test:  ## Run vitest
+	$(COMPOSE) run --rm dev sh -c "npm ci --silent && npx vitest run"
+
+lint:  ## ESLint + tsc typecheck
+	$(COMPOSE) run --rm dev sh -c "npm ci --silent && npx eslint . && npx tsc --noEmit"
+
+format:  ## Prettier
+	$(COMPOSE) run --rm dev sh -c "npm ci --silent && npx prettier --write ."
