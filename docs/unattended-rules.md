@@ -70,6 +70,18 @@ Issues labelled `tracking` or `roadmap` are epics, not direct work.
 - First failure: read logs, fix, push, rerun.
 - Same root cause twice: stop, comment with logs, move on.
 - Different root cause: treat as first failure for new cause.
+- **Total of 5 CI runs on the same branch regardless of root cause:** stop, comment with a summary of what was tried, label the PR `needs-decision`, move on. Five attempts is enough — if it isn't merging, the issue is under-specified or the architecture is fighting the change.
+
+## Time-bounded issues
+
+If a single issue has been `in-progress` for more than **1 hour** of wall-clock time (check the issue's `in-progress` label timestamp), abandon it:
+
+1. Close the open PR with a comment summarising what was tried and why you're stopping.
+2. Remove `in-progress` from the issue.
+3. Add `needs-decision` to the issue with a comment explaining what blocked you and what you'd need to proceed.
+4. Move on to the next ready-for-agent issue.
+
+One hour is a generous ceiling. If a feature can't land in that window, the spec needs sharpening or the work needs splitting. Do not silently keep grinding — the human cannot see the wasted spend.
 
 ## Progress log format
 
