@@ -9,6 +9,11 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# Project-scoped compose name so multiple repos can run agents in parallel
+# without colliding on container/image/network names.
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(basename "$REPO_ROOT")}"
+COMPOSE="docker compose -f docker/docker-compose.yml -p $COMPOSE_PROJECT_NAME"
+
 # --- Load config -----------------------------------------------------------
 
 if [ -f agent.config ]; then
@@ -48,8 +53,8 @@ touch .claude/unattended
 
 # --- Boot the agent container ---------------------------------------------
 
-echo "Starting agent container..."
-docker compose -f docker/docker-compose.yml up -d agent
+echo "Starting agent container (project: $COMPOSE_PROJECT_NAME)..."
+$COMPOSE up -d agent
 sleep 2
 
 LOG_FILE="logs/daily/$(date +%Y-%m-%d).md"
@@ -69,7 +74,7 @@ echo "Live log: tail -f $LOG_FILE"
 echo "Stop anytime: make agent-stop"
 echo ""
 
-docker compose -f docker/docker-compose.yml exec -T agent bash -lc "
+$COMPOSE exec -T agent bash -lc "
     set -euo pipefail
     cd /workspace
     source agent.config
@@ -92,6 +97,6 @@ echo "" >> "$LOG_FILE"
 echo "Session ended: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$LOG_FILE"
 
 rm -f .claude/unattended
-docker compose -f docker/docker-compose.yml stop agent
+$COMPOSE stop agent
 
 echo "Agent stopped. See $LOG_FILE."

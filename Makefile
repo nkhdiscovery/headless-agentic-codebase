@@ -5,7 +5,12 @@
 .PHONY: help build shell test lint format ci daemon \
         agent-start agent-stop agent-logs clean fresh
 
-COMPOSE := docker compose -f docker/docker-compose.yml
+# Project-scoped compose — derives a unique name from the repo directory so
+# multiple agent instances on the same host don't collide on image, container,
+# network, or volume names. Override with PROJECT_NAME=foo if needed.
+PROJECT_NAME ?= $(notdir $(CURDIR))
+COMPOSE := docker compose -f docker/docker-compose.yml -p $(PROJECT_NAME)
+export COMPOSE_PROJECT_NAME = $(PROJECT_NAME)
 
 help:  ## Show this help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)

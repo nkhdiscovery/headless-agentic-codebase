@@ -1,4 +1,8 @@
 # Generic agent setup. Same image runs all runtimes.
+#
+# Parallel-safe: image and container names are derived from the
+# COMPOSE_PROJECT_NAME (set by the Makefile from the repo directory name),
+# so multiple agent instances on the same machine don't collide.
 
 services:
 
@@ -11,7 +15,7 @@ services:
         USER_GID: "${GID:-1000}"
         # Limit which CLIs are installed at build time:
         # INSTALL_AGENTS: "claude"
-    image: agent-dev:latest
+    image: ${COMPOSE_PROJECT_NAME:-agent}-dev:latest
     volumes:
       - ..:/workspace:cached
       # GitHub auth (all runtimes need this)
@@ -41,3 +45,13 @@ services:
       CLAUDE_UNATTENDED: "1"
       AGENT_UNATTENDED: "1"
     command: /bin/bash
+
+  # Optional: HTTP daemon for projects that ship one. Override the host port
+  # in .env per project if you run multiple daemons in parallel:
+  #   DAEMON_PORT=8766 make daemon
+  daemon:
+    extends: dev
+    profiles: [daemon]
+    ports:
+      - "${DAEMON_PORT:-8765}:8765"
+    command: make daemon-run

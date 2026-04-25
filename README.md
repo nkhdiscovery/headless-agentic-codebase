@@ -270,6 +270,29 @@ See [`REMOTE_SETUP.md`](./REMOTE_SETUP.md) for the full walkthrough.
 
 ## Configuration
 
+### Running multiple projects in parallel on one machine
+
+The Makefile and launcher derive a unique compose project name from the repo directory, so you can run multiple agents on the same host without collisions:
+
+```bash
+~/code/project-a $ make agent-start    # container: project-a-agent-1
+~/code/project-b $ make agent-start    # container: project-b-agent-1
+```
+
+Each gets its own image (`project-a-dev:latest`, `project-b-dev:latest`), container, network, and volumes. They share your host's `~/.claude` and `~/.config/gh` for auth — that's intentional and fine.
+
+If you also expose HTTP daemons (the optional `daemon` compose profile), set a different host port per project in each `.env`:
+
+```bash
+# project-a/.env
+DAEMON_PORT=8765
+
+# project-b/.env
+DAEMON_PORT=8766
+```
+
+Override the project name explicitly with `PROJECT_NAME=foo make agent-start` if your directory names happen to clash.
+
 ### Choosing the agent runtime
 
 Edit `agent.config` (or set env vars):
