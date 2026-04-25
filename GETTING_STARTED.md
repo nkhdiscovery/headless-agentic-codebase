@@ -34,11 +34,24 @@ npm install -g @openai/codex
 codex login   # ChatGPT Plus/Pro account or set OPENAI_API_KEY
 ```
 
-**Verify:**
+**Verify (host dependencies):**
 ```bash
 claude --version    # or gemini --version / codex --version
 gh auth status      # GitHub CLI also needed
 docker --version    # Docker required
+jq --version        # for human-readable agent logs
+```
+
+If `jq` is missing:
+```bash
+# macOS
+brew install jq
+
+# Ubuntu/Debian
+sudo apt-get install jq
+
+# Arch
+sudo pacman -S jq
 ```
 
 ---
@@ -334,6 +347,13 @@ Your Docker image was built before the agent CLI install was added (or with a st
 ```bash
 make fresh        # clean + rebuild without cache
 make agent-start
+```
+
+**`make agent-start` exits with `Error 127`**
+`jq` is missing on the host. The launcher uses it to humanise the agent's stream-json output. Install:
+```bash
+brew install jq    # macOS
+sudo apt-get install jq    # Ubuntu/Debian
 ```
 
 **Agent opened a terrible PR**
