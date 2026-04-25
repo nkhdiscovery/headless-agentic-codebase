@@ -58,6 +58,7 @@ $COMPOSE up -d agent
 sleep 2
 
 LOG_FILE="logs/daily/$(date +%Y-%m-%d).md"
+RAW_LOG="logs/daily/$(date +%Y-%m-%d).jsonl"
 {
     echo ""
     echo "## Session $(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -70,9 +71,38 @@ LOG_FILE="logs/daily/$(date +%Y-%m-%d).md"
 # --- Run the loop inside the container ------------------------------------
 
 echo "Launching agent (runtime: $AGENT_RUNTIME, model: ${AGENT_MODEL:-default})"
-echo "Live log: tail -f $LOG_FILE"
+echo "Readable log: tail -f $LOG_FILE"
+echo "Forensic log (raw stream-json): $RAW_LOG"
 echo "Stop anytime: make agent-stop"
 echo ""
+
+# Filter stream-json into human-readable lines.
+#
+# - assistant text   -> the line as-is
+# - assistant tool   -> "→ Name(short input)"
+# - tool_result      -> "  result: <truncated>"
+# - rate_limit       -> "[rate limit] <status>"
+# - non-JSON lines (launcher messages, git output) pass through verbatim
+HUMANISE='
+  . as $raw |
+  (try fromjson catch null) as $j |
+  if $j == null then
+    $raw
+  elif $j.type == "assistant" then
+    ($j.message.content[]? |
+      if .type == "text" then .text
+      elif .type == "tool_use" then
+        "→ \(.name)(" + ((.input | tostring)[:100]) + ")"
+      else empty end)
+  elif $j.type == "user" then
+    ($j.message.content[]? |
+      if .type == "tool_result" then
+        "  result: " + ((.content | tostring | gsub("\n"; " "))[:200])
+      else empty end)
+  elif $j.type == "rate_limit_event" then
+    "[rate limit] " + $j.rate_limit_info.status
+  else empty end
+'
 
 $COMPOSE exec -T agent bash -lc "
     set -euo pipefail
@@ -84,7 +114,6 @@ $COMPOSE exec -T agent bash -lc "
     check_agent_authed
 
     has_work() {
-        # Returns 0 if there's ready-for-agent work or PRs needing fixes.
         local ready_count fix_count
         ready_count=\$(gh issue list --label ready-for-agent --state open --json number 2>/dev/null | jq 'length' || echo 0)
         fix_count=\$(gh pr list --label agent-please-fix --state open --json number 2>/dev/null | jq 'length' || echo 0)
@@ -102,7 +131,7 @@ $COMPOSE exec -T agent bash -lc "
             sleep \"\${AGENT_IDLE_SLEEP}\"
         fi
     done
-" 2>&1 | tee -a "$LOG_FILE"
+" 2>&1 | tee -a "$RAW_LOG" | jq -Rr --unbuffered "$HUMANISE" 2>/dev/null | tee -a "$LOG_FILE"
 
 # --- Post-session cleanup --------------------------------------------------
 
