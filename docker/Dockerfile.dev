@@ -22,12 +22,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         wget \
         ca-certificates \
         gnupg \
-        nodejs \
-        npm \
         make \
         jq \
         bash \
     && rm -rf /var/lib/apt/lists/*
+
+# Node.js 20 from NodeSource (Ubuntu's stock node 12 is too old for agent CLIs)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/* \
+    && node --version && npm --version
 
 # GitHub CLI
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
