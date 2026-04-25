@@ -459,6 +459,46 @@ The only thing that grows over time is `logs/daily/` (one file per day). After m
 
 ---
 
+## Keeping in sync with template updates
+
+The template repo evolves. To pull infrastructure improvements (new agent runtimes, cost-control features, bug fixes) into a project you already created from it:
+
+```bash
+make sync-template
+```
+
+This runs `scripts/sync-from-template.sh`, which:
+
+1. Adds the template as a git remote if not already (one-time)
+2. Fetches the latest template
+3. **Safe files** (pure infrastructure like `scripts/agent-cost.sh`, `agents/*.sh`, prompts) are overwritten cleanly
+4. **Review files** (`agent.config`, `Makefile`, `scripts/launch-agent.sh`, `docs/unattended-rules.md`, `GETTING_STARTED.md`) are 3-way-merged: if your customisations don't conflict with template changes, they merge cleanly; if they do, the file gets standard `<<<<<<<` conflict markers for you to resolve manually
+5. **Project-only files** (`CLAUDE.md`, `README.md`, `docs/product.md`, etc.) are never touched
+6. Ensures the latest template labels exist (`high-cost`, `human-only-merge`, `docs-exempt`)
+
+The script tracks the last-synced template version in `.template-base/` (gitignored) so subsequent syncs get a real 3-way merge rather than overwriting your customisations.
+
+After running:
+
+```bash
+# Resolve any conflicts surfaced
+$EDITOR <conflicted-files>
+
+# Test
+make fresh
+make agent-stop
+make agent-start
+
+# Commit
+git add .
+git commit -m "chore: sync infrastructure from template"
+git push
+```
+
+Run this monthly or whenever you see a feature in the template you want.
+
+---
+
 ## When something goes wrong
 
 **Container missing the agent CLI ("claude CLI not found")**

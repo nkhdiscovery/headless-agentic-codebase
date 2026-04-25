@@ -3,7 +3,7 @@
 # Customise test/lint/format targets per language.
 
 .PHONY: help build rebuild shell test lint format ci daemon \
-        agent-start agent-stop agent-logs agent-cost clean fresh
+        agent-start agent-stop agent-logs agent-cost sync-template clean fresh
 
 # Project-scoped compose — derives a unique name from the repo directory so
 # multiple agent instances on the same host don't collide on image, container,
@@ -59,6 +59,9 @@ agent-logs:  ## Tail today's log
 
 agent-cost:  ## Show today's agent token spend
 	@bash scripts/agent-cost.sh today
+
+sync-template:  ## Pull infrastructure updates from the headless-agentic-codebase template (3-way merge, surfaces conflicts)
+	@bash scripts/sync-from-template.sh
 
 # --- Housekeeping ---
 clean:  ## Remove build artefacts

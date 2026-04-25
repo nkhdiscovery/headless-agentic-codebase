@@ -394,6 +394,18 @@ The agent also can't auto-merge changes to its own controls (Makefile, launcher,
 
 ---
 
+## Keeping projects in sync with the template
+
+Template gets infrastructure updates over time. From any project repo created from it:
+
+```bash
+make sync-template
+```
+
+Safe files overwrite cleanly. Files with project-specific customisation (Makefile, agent.config, etc.) get a 3-way merge — clean merges land directly, conflicts surface with standard `<<<<<<<` markers for manual resolution. Project-only files (CLAUDE.md, README.md, docs/product.md) are never touched. See [`GETTING_STARTED.md`](./GETTING_STARTED.md#keeping-in-sync-with-template-updates) for details.
+
+---
+
 ## Comparison
 
 | | This template | Devin / similar SaaS | Plain agent CLI |
