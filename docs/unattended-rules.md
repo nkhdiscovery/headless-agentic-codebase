@@ -21,13 +21,30 @@ You are a founding engineer with product authority. Ship working tested code. Ev
 1. Pick the oldest such PR.
 2. Address the feedback on the existing branch.
 3. Push, get CI green (max 5 runs total, see CI failure handling below).
-4. **Self-merge (only after ALL checks pass).** Before merging, verify every required check succeeded:
+4. **Self-merge (only after ALL checks pass AND no conflicts).** Before attempting merge:
+   
+   a) Check for merge conflicts:
+   ```bash
+   MERGEABLE=$(gh pr view <N> --json mergeable --jq '.mergeable')
+   ```
+   
+   If `MERGEABLE` is `CONFLICTING`:
+   - Attempt rebase: `git fetch origin main && git rebase origin/main`
+   - If rebase succeeds with no conflict markers: push, wait for CI, continue normally
+   - If rebase produces conflict markers: **stop work on this PR**
+     - Comment: "Conflicts with main in <files>. Main has changed since this branch was created — human review needed to resolve context mismatches."
+     - Add `needs-decision` label
+     - Move on to the next issue
+   
+   b) Verify all checks pass:
    ```bash
    CI_PASSED=$(gh pr view <N> --json statusCheckRollup \
      --jq '.statusCheckRollup | map(select(.conclusion != "SKIPPED")) | all(.conclusion == "SUCCESS")')
    ```
-   If `CI_PASSED` returns `true`, proceed: `gh pr merge <N> --squash --delete-branch`.
-   If `false` or the PR touches self-control files (see hard limit 8), hand off via `human-only-merge` / `needs-decision` and move on.
+   
+   If `CI_PASSED` returns `true` AND `MERGEABLE` is `MERGEABLE`, proceed: `gh pr merge <N> --squash --delete-branch`.
+   
+   If CI failed or PR touches self-control files (see hard limit 8), hand off via `human-only-merge` / `needs-decision` and move on.
 5. Post cycle cost comment per "Cost transparency on PRs" section below.
 6. Log progress, exit.
 
@@ -40,13 +57,30 @@ You are a founding engineer with product authority. Ship working tested code. Ev
 5. Tests first: failing tests before implementation.
 6. Implement, run `make ci`.
 7. Push, open PR, address CI failures (max 5 runs total).
-8. **Self-merge (only after ALL checks pass).** Before merging, verify every required check succeeded:
+8. **Self-merge (only after ALL checks pass AND no conflicts).** Before attempting merge:
+   
+   a) Check for merge conflicts:
+   ```bash
+   MERGEABLE=$(gh pr view <N> --json mergeable --jq '.mergeable')
+   ```
+   
+   If `MERGEABLE` is `CONFLICTING`:
+   - Attempt rebase: `git fetch origin main && git rebase origin/main`
+   - If rebase succeeds with no conflict markers: push, wait for CI, continue normally
+   - If rebase produces conflict markers: **stop work on this PR**
+     - Comment: "Conflicts with main in <files>. Main has changed since this branch was created — human review needed to resolve context mismatches."
+     - Add `needs-decision` label
+     - Move on to the next issue (do NOT continue trying to fix this one)
+   
+   b) Verify all checks pass:
    ```bash
    CI_PASSED=$(gh pr view <N> --json statusCheckRollup \
      --jq '.statusCheckRollup | map(select(.conclusion != "SKIPPED")) | all(.conclusion == "SUCCESS")')
    ```
-   If `CI_PASSED` returns `true`, proceed: `gh pr merge <N> --squash --delete-branch`.
-   If `false`, read the failing check logs, fix on this branch, push, and wait for CI to rerun. Do NOT merge with any check in FAILURE state.
+   
+   If `CI_PASSED` returns `true` AND `MERGEABLE` is `MERGEABLE`, proceed: `gh pr merge <N> --squash --delete-branch`.
+   
+   If CI failed, read the failing check logs, fix on this branch, push, and wait for CI to rerun. Do NOT merge with any check in FAILURE state.
 9. Post cycle cost comment per "Cost transparency on PRs" section below.
 10. Append plain-English entry to `logs/progress.md`.
 11. Append technical entry to `logs/daily/YYYY-MM-DD.md`.
