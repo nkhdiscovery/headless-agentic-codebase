@@ -110,15 +110,14 @@ chmod +x scripts/*.sh agents/*.sh 2>/dev/null || true
 # --- 3-way merge review files ---------------------------------------------
 
 echo ""
-echo "==> 3-way merging review files..."
+echo "==> Reviewing files that may have local customisations..."
 
-CLEAN_MERGES=()
+APPLIED=()
 CONFLICTS=()
-NO_CHANGE=()
-FIRST_RUN=()
+UNCHANGED=()
 
 for f in "${REVIEW_FILES[@]}"; do
-    # Skip if file doesn't exist in template (template doesn't have it for some reason)
+    # Skip if file doesn't exist in template
     if ! git cat-file -e "$TEMPLATE_REMOTE_NAME/main:$f" 2>/dev/null; then
         continue
     fi
@@ -126,68 +125,61 @@ for f in "${REVIEW_FILES[@]}"; do
     THEIRS_TMP=$(mktemp)
     git show "$TEMPLATE_REMOTE_NAME/main:$f" > "$THEIRS_TMP"
 
-    # If we don't have the file at all yet, just take theirs
+    # If we don't have the file locally, just take theirs
     if [ ! -f "$f" ]; then
         mkdir -p "$(dirname "$f")"
         cp "$THEIRS_TMP" "$f"
-        mkdir -p "$(dirname "$BASE_DIR/$f")"
-        cp "$THEIRS_TMP" "$BASE_DIR/$f"
         rm "$THEIRS_TMP"
-        CLEAN_MERGES+=("$f")
+        APPLIED+=("$f")
         echo "  added:     $f (didn't exist locally)"
         continue
     fi
 
-    # If their version is identical to ours, nothing to do
+    # If our version is identical to template, nothing to do
     if cmp -s "$f" "$THEIRS_TMP"; then
-        # Update base anyway so we have it for next sync
-        mkdir -p "$(dirname "$BASE_DIR/$f")"
-        cp "$THEIRS_TMP" "$BASE_DIR/$f"
         rm "$THEIRS_TMP"
-        NO_CHANGE+=("$f")
+        UNCHANGED+=("$f")
         continue
     fi
 
-    # 3-way merge: base = last synced version from template
+    # Files differ. Try 3-way merge only if we have a saved baseline.
     if [ ! -f "$BASE_DIR/$f" ]; then
-        # First sync of this file. We have no common-ancestor, so we can't
-        # safely merge — we'd risk silently overwriting customisations OR
-        # silently keeping stale code. The safe thing is to:
-        #   1. Save the template's current version as the base
-        #   2. Tell the user to manually diff and decide
-        #   3. Make NO changes to the working file this run
-        # On the next sync, we'll have a real base and can do real 3-way merges.
+        # No baseline — can't safely merge. Surface as conflict.
+        # Show both versions so user can decide.
+        echo "  REVIEW:    $f (no baseline — manually compare with template)"
+        echo "             Your version: $f"
+        echo "             Template:     git show $TEMPLATE_REMOTE_NAME/main:$f"
+        echo "             To adopt template: git checkout $TEMPLATE_REMOTE_NAME/main -- $f"
+        
+        # Save template as baseline for next time
         mkdir -p "$(dirname "$BASE_DIR/$f")"
         cp "$THEIRS_TMP" "$BASE_DIR/$f"
         rm "$THEIRS_TMP"
-        FIRST_RUN+=("$f")
-        echo "  FIRST RUN: $f (saved template version as baseline; review manually with: git diff $TEMPLATE_REMOTE_NAME/main -- $f)"
+        CONFLICTS+=("$f")
         continue
     fi
 
+    # We have a baseline. Do real 3-way merge.
     BASE_TMP=$(mktemp)
     cp "$BASE_DIR/$f" "$BASE_TMP"
 
-    # `git merge-file` does a 3-way merge in place on the first arg.
-    # Returns 0 if clean, >0 if conflicts.
     MINE_TMP=$(mktemp)
     cp "$f" "$MINE_TMP"
 
-    if git merge-file -L "yours" -L "common-ancestor" -L "template" \
+    if git merge-file -L "yours" -L "baseline" -L "template" \
             "$MINE_TMP" "$BASE_TMP" "$THEIRS_TMP" 2>/dev/null; then
-        # Clean merge. Apply.
+        # Clean merge
         cp "$MINE_TMP" "$f"
-        # Update base to the new theirs
+        # Update baseline to new template version
         mkdir -p "$(dirname "$BASE_DIR/$f")"
         cp "$THEIRS_TMP" "$BASE_DIR/$f"
-        CLEAN_MERGES+=("$f")
+        APPLIED+=("$f")
         echo "  merged:    $f (clean)"
     else
-        # Conflicts. Apply the conflicted version so the user can edit.
+        # Conflict — apply the conflicted version so user can resolve
         cp "$MINE_TMP" "$f"
-        # Do NOT update base yet — base updates only after conflicts resolved + committed.
         CONFLICTS+=("$f")
-        echo "  CONFLICT:  $f"
+        echo "  CONFLICT:  $f (resolve conflict markers, then re-run sync)"
     fi
 
     rm -f "$THEIRS_TMP" "$BASE_TMP" "$MINE_TMP"
@@ -215,43 +207,42 @@ echo "Sync summary"
 echo "================================================================"
 echo ""
 echo "Safe files updated:    ${#SAFE_FILES[@]}"
-echo "Clean merges:          ${#CLEAN_MERGES[@]}"
-echo "No changes needed:     ${#NO_CHANGE[@]}"
-echo "First-run baseline:    ${#FIRST_RUN[@]}"
-echo "Conflicts to resolve:  ${#CONFLICTS[@]}"
+echo "Files applied:         ${#APPLIED[@]}"
+echo "Unchanged:             ${#UNCHANGED[@]}"
+echo "Needs review/resolve:  ${#CONFLICTS[@]}"
 echo ""
 
-if [ "${#FIRST_RUN[@]}" -gt 0 ]; then
-    echo "First-run files (no changes made — diff against template manually):"
-    for f in "${FIRST_RUN[@]}"; do
-        echo "  $f"
-        echo "    git diff $TEMPLATE_REMOTE_NAME/main -- $f"
+if [ "${#APPLIED[@]}" -gt 0 ]; then
+    echo "Changes applied (verify with 'git diff HEAD'):"
+    for f in "${APPLIED[@]}"; do
+        lines=$(git diff HEAD -- "$f" 2>/dev/null | grep -c "^+" || echo "?")
+        echo "  $f (+$lines lines)"
     done
-    echo ""
-    echo "These files have a saved baseline now. The next 'make sync-template'"
-    echo "will do a real 3-way merge against template changes since today."
     echo ""
 fi
 
 if [ "${#CONFLICTS[@]}" -gt 0 ]; then
-    echo "Files with conflict markers — open and resolve:"
+    echo "Files needing your attention:"
     for f in "${CONFLICTS[@]}"; do
-        echo "  $f"
+        if grep -q "^<<<<<<< yours" "$f" 2>/dev/null; then
+            echo "  $f (CONFLICT — resolve markers, then re-run sync)"
+        else
+            echo "  $f (REVIEW — yours differs from template)"
+            echo "             Compare:       git diff $TEMPLATE_REMOTE_NAME/main -- $f"
+            echo "             Adopt template: git checkout $TEMPLATE_REMOTE_NAME/main -- $f"
+        fi
     done
     echo ""
     echo "Conflict markers look like:"
     echo "    <<<<<<< yours"
     echo "    your customised line"
-    echo "    ||||||| common-ancestor"
-    echo "    the line as it was when you last synced"
+    echo "    ||||||| baseline"
+    echo "    the line when you last synced"
     echo "    ======="
-    echo "    the line as it is in the template now"
+    echo "    the line in template now"
     echo "    >>>>>>> template"
     echo ""
-    echo "Resolve, save, then run this script again to update the template-base"
-    echo "for next time. Or commit your resolution directly."
-    echo ""
-    echo "Tip: 'git mergetool' or VS Code's merge editor can help."
+    echo "Resolve markers, then re-run sync or commit directly."
     echo ""
 fi
 
