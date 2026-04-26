@@ -55,7 +55,7 @@ aggregate() {
     # Identify model from first session-init line we can find
     local model=""
     for f in "${files[@]}"; do
-        model=$(grep -E '^\{' "$f" 2>/dev/null \
+        model=$({ grep -E '^\{' "$f" 2>/dev/null || true; } \
             | jq -r 'select(.type=="system" and .subtype=="init") | .model // empty' 2>/dev/null \
             | head -1)
         [ -n "$model" ] && break
@@ -70,9 +70,9 @@ aggregate() {
     cache_r_p=$(echo "$prices" | awk '{print $3}')
     cache_w_p=$(echo "$prices" | awk '{print $4}')
 
-    # Concatenate all valid JSON lines, sum the usage fields
-    cat "${files[@]}" \
-      | grep -E '^\{' \
+    # Concatenate all valid JSON lines, sum the usage fields.
+    # Use `|| true` on grep so an empty match doesn't kill the pipe under pipefail.
+    { cat "${files[@]}" | grep -E '^\{' || true; } \
       | jq -s --arg model "$model" \
               --argjson in_p "$in_p" \
               --argjson out_p "$out_p" \
@@ -116,6 +116,10 @@ cmd_today() {
         echo "No log for today yet."
         return
     fi
+    if [ ! -s "$f" ]; then
+        echo "Today's log is empty (no agent activity recorded yet)."
+        return
+    fi
     printf '%s\n' "$f" | aggregate | humanise
 }
 
@@ -140,7 +144,7 @@ cmd_range() {
 
 cmd_raw_today() {
     local f="logs/daily/$(date +%Y-%m-%d).jsonl"
-    if [ ! -f "$f" ]; then
+    if [ ! -f "$f" ] || [ ! -s "$f" ]; then
         echo '{"input":0,"output":0,"cache_read":0,"cache_create":0,"cost_usd":0,"model":"none"}'
         return
     fi
