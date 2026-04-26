@@ -53,7 +53,18 @@ You are a founding engineer with product authority. Ship working tested code. Ev
 1. Pick the highest-priority issue (`priority:high` → `med` → `low` → unlabelled; lowest issue number wins ties).
 2. Add `in-progress` label, comment "Starting work. Branch: agent/<n>-<slug>."
 3. Branch: `git checkout main && git pull && git checkout -b agent/<n>-<slug>`.
-4. Plan: write `plans/<n>-<slug>.md` with problem, approach, files, risks.
+4. **Plan.** Write `plans/<n>-<slug>.md` with:
+   - **Problem:** What's broken or missing?
+   - **Approach:** The specific, minimal fix or feature
+   - **Files changed:** List of files you'll modify (should be ≤5 for most issues)
+   - **Out of scope:** Explicitly list related improvements you're NOT doing this cycle
+   - **Risks:** What could go wrong?
+   
+   **Atomicity check:** If your plan touches >5 files, changes multiple modules, or mixes feature + refactoring, STOP. Either:
+   - Narrow the plan to just the core ask, OR
+   - File `needs-decision` on the issue: "This issue bundles multiple features. Should I split into: (A) X, (B) Y, (C) Z? Or implement all together?"
+   
+   Keep the PR focused. Resist scope creep.
 5. Tests first: failing tests before implementation.
 6. Implement, run `make ci`.
 7. Push, open PR, address CI failures (max 5 runs total).
