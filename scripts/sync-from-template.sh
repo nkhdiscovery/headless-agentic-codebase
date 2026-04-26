@@ -159,10 +159,23 @@ for f in "${REVIEW_FILES[@]}"; do
         continue
     fi
 
-    # We have a baseline. Do real 3-way merge.
+    # We have a baseline. Check if baseline == template (suspicious).
     BASE_TMP=$(mktemp)
     cp "$BASE_DIR/$f" "$BASE_TMP"
+    
+    # If baseline is identical to template, but yours differs, this is a stale
+    # local version that got left behind in an earlier sync. Don't 3-way merge
+    # (it'll silently keep stale), force to REVIEW instead.
+    if cmp -s "$BASE_TMP" "$THEIRS_TMP"; then
+        echo "  REVIEW:    $f (yours differs from template; baseline already up-to-date)"
+        echo "             Compare:       git diff $TEMPLATE_REMOTE_NAME/main -- $f"
+        echo "             Adopt template: git checkout $TEMPLATE_REMOTE_NAME/main -- $f"
+        rm "$BASE_TMP" "$THEIRS_TMP"
+        CONFLICTS+=("$f")
+        continue
+    fi
 
+    # Real 3-way merge: base ≠ template, both changed since last sync.
     MINE_TMP=$(mktemp)
     cp "$f" "$MINE_TMP"
 
