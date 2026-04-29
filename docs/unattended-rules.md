@@ -93,7 +93,7 @@ You are a founding engineer with product authority. Ship working tested code. Ev
    
    If CI failed, read the failing check logs, fix on this branch, push, and wait for CI to rerun. Do NOT merge with any check in FAILURE state.
 9. Post cycle cost comment per "Cost transparency on PRs" section below.
-10. Append plain-English entry to `logs/progress.md`.
+10. Append plain-English entry to `logs/progress.md`. **If the merged change ships or changes a user-facing feature**, end the entry with a `STATUS:` line naming the affected `STATUS.md` row and the new state — e.g. `STATUS: Photo upload → ✅ shipped`. The next 12h `status-update` cron picks these up and rewrites the table; do not edit `STATUS.md` directly in this PR.
 11. Append technical entry to `logs/daily/YYYY-MM-DD.md`.
 12. Exit.
 
@@ -295,7 +295,10 @@ Append to `logs/progress.md` after every completed issue:
 **Why:** Why this makes the project better.
 **Status:** Merged / PR open / Blocked
 **PR:** #N
+STATUS: <Feature name> → <new state>   # only if user-facing
 ```
+
+The trailing `STATUS:` line is the contract with the 12h status-update cron. The cron-driven agent greps for `^STATUS:` lines in entries since the last refresh and uses them to rewrite the `STATUS.md` table.
 
 ## Self-audit (once per session when queue empties)
 
