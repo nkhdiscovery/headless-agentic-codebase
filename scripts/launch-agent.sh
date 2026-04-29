@@ -108,6 +108,9 @@ $COMPOSE exec -T agent bash -lc "
     set -euo pipefail
     cd /workspace
     source agent.config
+    # Load .env if present — provides HEALTHCHECKS_URL, NTFY_TOPIC, NTFY_SERVER, etc.
+    # shellcheck disable=SC1091
+    [ -f .env ] && source .env 2>/dev/null || true
     source agents/\${AGENT_RUNTIME}.sh
 
     check_agent_installed
@@ -136,21 +139,91 @@ $COMPOSE exec -T agent bash -lc "
         return 0
     }
 
+    # --- Health signal helpers -----------------------------------------------
+
+    # Ping healthchecks.io dead-man's switch. No-op if HEALTHCHECKS_URL is unset.
+    hc_ping() {
+        [ -z \"\${HEALTHCHECKS_URL:-}\" ] && return 0
+        curl -fsS --retry 3 --max-time 10 \"\${HEALTHCHECKS_URL}\" >/dev/null 2>&1 || true
+    }
+
+    # Push notification via ntfy.sh (or self-hosted). No-op if NTFY_TOPIC unset.
+    ntfy_push() {
+        local msg=\"\$1\" priority=\"\${2:-low}\"
+        [ -z \"\${NTFY_TOPIC:-}\" ] && return 0
+        curl -fsS --retry 3 --max-time 10 \
+            -H \"Priority: \${priority}\" \
+            -d \"\${msg}\" \
+            \"\${NTFY_SERVER:-https://ntfy.sh}/\${NTFY_TOPIC}\" >/dev/null 2>&1 || true
+    }
+
+    # GitHub-native heartbeat: update .agent/heartbeat via API each cycle.
+    # Opt-in: only runs when AGENT_GITHUB_HEARTBEAT=1.
+    hb_commit() {
+        [ \"\${AGENT_GITHUB_HEARTBEAT:-}\" = \"1\" ] || return 0
+        local ts repo content sha
+        ts=\$(date -u +%Y-%m-%dT%H:%M:%SZ)
+        repo=\$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null || true)
+        [ -z \"\$repo\" ] && return 0
+        content=\$(printf 'Last heartbeat: %s\\n' \"\$ts\" | base64 -w0 2>/dev/null \
+                    || printf 'Last heartbeat: %s\\n' \"\$ts\" | base64)
+        sha=\$(gh api \"repos/\${repo}/contents/.agent/heartbeat\" \
+                --jq '.sha' 2>/dev/null || true)
+        if [ -n \"\$sha\" ]; then
+            gh api --method PUT \"repos/\${repo}/contents/.agent/heartbeat\" \
+                -f message=\"chore: heartbeat \${ts}\" \
+                -f content=\"\${content}\" \
+                -f sha=\"\${sha}\" >/dev/null 2>&1 || true
+        else
+            gh api --method PUT \"repos/\${repo}/contents/.agent/heartbeat\" \
+                -f message=\"chore: heartbeat \${ts}\" \
+                -f content=\"\${content}\" >/dev/null 2>&1 || true
+        fi
+    }
+
     while true; do
         # Guard rails — check before starting a cycle.
         if ! under_daily_cap; then
             echo \"[launcher] daily cost cap reached. Sleeping 1h then re-checking.\"
+            ntfy_push \"⏸ Cost cap reached — sleeping 1h\"
             sleep 3600
             continue
         fi
         if ! under_pr_cap; then
             echo \"[launcher] daily PR merge cap reached. Sleeping 1h then re-checking.\"
+            ntfy_push \"⏸ PR cap reached — sleeping 1h\"
             sleep 3600
             continue
         fi
 
+        hc_ping
+        hb_commit
+
+        # Describe the upcoming work for the ntfy start notification.
+        _work_desc=\"\"
+        _pr=\$(gh pr list --label agent-please-fix --state open --json number \
+                --jq '.[0].number // empty' 2>/dev/null || true)
+        if [ -n \"\$_pr\" ]; then
+            _work_desc=\"fixing PR #\${_pr}\"
+        else
+            _issue=\$(gh issue list --label ready-for-agent --state open \
+                --json number,title \
+                --jq 'sort_by(.number) | .[0] | \"#\(.number) \(.title)\"' \
+                2>/dev/null || true)
+            [ -n \"\$_issue\" ] && _work_desc=\"\$_issue\" || _work_desc=\"self-audit\"
+        fi
+        ntfy_push \"▶ \${_work_desc}\"
+
         git checkout main && git pull --rebase 2>&1 | tail -3 || true
-        run_agent_cycle || echo '[launcher] cycle returned non-zero, continuing loop'
+
+        if run_agent_cycle; then
+            _cost=\$(bash scripts/agent-cost.sh pr-cost 2>/dev/null || echo \"?\")
+            ntfy_push \"✓ Done: \${_work_desc} | \${_cost} USD\"
+        else
+            echo '[launcher] cycle returned non-zero, continuing loop'
+            _cost=\$(bash scripts/agent-cost.sh pr-cost 2>/dev/null || echo \"?\")
+            ntfy_push \"⚠ Blocked: \${_work_desc} | \${_cost} USD\" \"default\"
+        fi
 
         if has_work; then
             echo \"[launcher] cycle complete — work pending, starting next cycle immediately\"

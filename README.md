@@ -168,6 +168,23 @@ When the agent picks up an issue, it adds the `in-progress` label and comments "
 
 Per-day technical log: every issue picked up, every PR opened, every CI failure. Useful for debugging when something goes wrong or auditing the agent's decisions later.
 
+## Real-time monitoring (opt-in)
+
+The built-in logs and labels tell you what happened; these two services tell you what's happening *right now* from your phone — without opening GitHub.
+
+**Dead-man's switch — [healthchecks.io](https://healthchecks.io) (free)**
+The agent pings a URL at the start of every cycle. If pings stop for longer than twice your idle sleep period, healthchecks.io fires an alert (email, SMS, Slack). Set `HEALTHCHECKS_URL` in `.env` and configure the check period to match `AGENT_IDLE_SECONDS`.
+
+**Push notifications — [ntfy.sh](https://ntfy.sh) (free, no account)**
+The agent posts a message at cycle start (`▶ #42 Add search`), cycle end (`✓ Done | 0.14 USD`), and on non-zero exits (`⚠ Blocked: ...`). Install the ntfy app, subscribe to your topic, set `NTFY_TOPIC` in `.env`. Self-host with `NTFY_SERVER` if preferred.
+
+**GitHub-native heartbeat (zero external services)**
+Set `AGENT_GITHUB_HEARTBEAT=1` to update `.agent/heartbeat` in the repo via the GitHub API each cycle. The commit appears in your mobile activity feed — no setup needed. Trade-off: one commit per cycle on the default branch.
+
+See `.env.example` for all vars and `make agent-status` for a quick liveness snapshot.
+
+---
+
 ## Keeping docs honest as code grows
 
 The hardest problem with long-running agent work is **docs drifting from code**. Over weeks the agent ships features faster than its own context can stay accurate; eventually it starts making decisions based on stale assumptions.
