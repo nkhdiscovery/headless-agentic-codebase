@@ -3,7 +3,7 @@
 # Customise test/lint/format targets per language.
 
 .PHONY: help build rebuild shell test lint format ci daemon \
-        agent-start agent-stop agent-logs agent-cost sync-template clean fresh
+        agent-start agent-stop agent-logs agent-cost agent-status sync-template clean fresh
 
 # Project-scoped compose — derives a unique name from the repo directory so
 # multiple agent instances on the same host don't collide on image, container,
@@ -59,6 +59,23 @@ agent-logs:  ## Tail today's log
 
 agent-cost:  ## Show today's agent token spend
 	@bash scripts/agent-cost.sh today
+
+agent-status:  ## Show agent liveness: container state, last log activity, today's cost
+	@echo "=== Container ==="
+	@$(COMPOSE) ps agent 2>/dev/null | grep -E "NAME|agent" || echo "  (not running)"
+	@echo ""
+	@echo "=== Last activity ==="
+	@LOG=logs/daily/$$(date +%Y-%m-%d).md; \
+		if [ -f "$$LOG" ]; then \
+			echo "  Log: $$LOG"; \
+			printf  "  Updated: "; stat -c '%y' "$$LOG" 2>/dev/null || stat -f '%Sm' "$$LOG" 2>/dev/null || echo "unknown"; \
+			printf  "  Last entry: "; tail -1 "$$LOG" 2>/dev/null || echo ""; \
+		else \
+			echo "  No log for today yet."; \
+		fi
+	@echo ""
+	@echo "=== Today's cost ==="
+	@bash scripts/agent-cost.sh today 2>/dev/null || echo "  No cost data yet."
 
 sync-template:  ## Pull infrastructure updates from the headless-agentic-codebase template (3-way merge, surfaces conflicts)
 	@bash scripts/sync-from-template.sh
