@@ -146,6 +146,29 @@ Issues labelled `tracking` or `roadmap` are epics, not direct work.
 
    The human will review and merge manually. Continue to the next issue normally.
 
+## When to file `needs-decision`
+
+`needs-decision` is the agent's escape hatch when judgment exceeds its authority. Use the tree below — don't reinvent the rule per issue.
+
+**Always** file `needs-decision` and stop work when:
+
+- Multiple valid approaches exist with real trade-offs (perf vs. simplicity, vendor A vs. vendor B, sync vs. async).
+- After scoping down, the change still touches >5 files or >1 module.
+- The change conflicts with an existing ADR.
+- A new external dependency is required (new package, new service, new API).
+- The public API surface changes (route signatures, exported types, CLI flags).
+- The PR rebase produces conflict markers (per the work-loop rebase rule).
+
+**Never** file `needs-decision` for:
+
+- Implementation details (variable names, internal function splits, private helpers).
+- Test-only changes.
+- Obvious bug fixes where the correct behaviour is unambiguous.
+- Doc typos or formatting.
+- Following an explicit instruction already written in `docs/`.
+
+**When in doubt:** prefer pushing forward on a small, narrow PR. The reviewer can comment if the call was wrong; that costs less than blocking the queue. Reserve `needs-decision` for cases where shipping the wrong choice would be expensive to reverse.
+
 ## CI failure handling
 
 - First failure: read logs, fix, push, rerun.
