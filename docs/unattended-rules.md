@@ -30,13 +30,13 @@ You are a founding engineer with product authority. Ship working tested code. Ev
    
    If `MERGEABLE` is `CONFLICTING`:
    - Attempt rebase: `git fetch origin main && git rebase origin/main`
-   - If rebase succeeds with no conflict markers: push, wait for CI, continue normally
+   - If rebase succeeds with no conflict markers: push, wait for CI (see "Waiting for CI to finish"), continue normally
    - If rebase produces conflict markers: **stop work on this PR**
      - Comment: "Conflicts with main in <files>. Main has changed since this branch was created — human review needed to resolve context mismatches."
      - Add `needs-decision` label
      - Move on to the next issue
    
-   b) Verify all checks pass:
+   b) Wait for CI to finish (see "Waiting for CI to finish"), then verify all checks pass:
    ```bash
    CI_PASSED=$(gh pr view <N> --json statusCheckRollup \
      --jq '.statusCheckRollup | map(select(.conclusion != "SKIPPED")) | all(.conclusion == "SUCCESS")')
@@ -77,13 +77,13 @@ You are a founding engineer with product authority. Ship working tested code. Ev
    
    If `MERGEABLE` is `CONFLICTING`:
    - Attempt rebase: `git fetch origin main && git rebase origin/main`
-   - If rebase succeeds with no conflict markers: push, wait for CI, continue normally
+   - If rebase succeeds with no conflict markers: push, wait for CI (see "Waiting for CI to finish"), continue normally
    - If rebase produces conflict markers: **stop work on this PR**
      - Comment: "Conflicts with main in <files>. Main has changed since this branch was created — human review needed to resolve context mismatches."
      - Add `needs-decision` label
      - Move on to the next issue (do NOT continue trying to fix this one)
    
-   b) Verify all checks pass:
+   b) Wait for CI to finish (see "Waiting for CI to finish"), then verify all checks pass:
    ```bash
    CI_PASSED=$(gh pr view <N> --json statusCheckRollup \
      --jq '.statusCheckRollup | map(select(.conclusion != "SKIPPED")) | all(.conclusion == "SUCCESS")')
@@ -91,7 +91,7 @@ You are a founding engineer with product authority. Ship working tested code. Ev
    
    If `CI_PASSED` returns `true` AND `MERGEABLE` is `MERGEABLE`, proceed: `gh pr merge <N> --squash --delete-branch`.
    
-   If CI failed, read the failing check logs, fix on this branch, push, and wait for CI to rerun. Do NOT merge with any check in FAILURE state.
+   If CI failed, read the failing check logs, fix on this branch, push, and wait for CI to rerun (see "Waiting for CI to finish"). Do NOT merge with any check in FAILURE state.
 9. Post cycle cost comment per "Cost transparency on PRs" section below.
 10. Append plain-English entry to `logs/progress.md`. **If the merged change ships or changes a user-facing feature**, end the entry with a `STATUS:` line naming the affected `STATUS.md` row and the new state — e.g. `STATUS: Photo upload → ✅ shipped`. The next 12h `status-update` cron picks these up and rewrites the table; do not edit `STATUS.md` directly in this PR.
 11. Append technical entry to `logs/daily/YYYY-MM-DD.md`.
@@ -225,6 +225,26 @@ Issues labelled `tracking` or `roadmap` are epics, not direct work.
 - Following an explicit instruction already written in `docs/`.
 
 **When in doubt:** prefer pushing forward on a small, narrow PR. The reviewer can comment if the call was wrong; that costs less than blocking the queue. Reserve `needs-decision` for cases where shipping the wrong choice would be expensive to reverse.
+
+## Waiting for CI to finish
+
+After every push, **wait for all checks to reach a terminal state before reading results**. Use this pattern:
+
+```bash
+# Exits when every check is out of QUEUED / IN_PROGRESS — passes OR fails
+until gh pr view <N> --json statusCheckRollup \
+  --jq '[.statusCheckRollup[] | select(.status == "IN_PROGRESS" or .status == "QUEUED")] | length == 0' \
+  | grep -q true; do sleep 30; done
+```
+
+Then read the outcome:
+
+```bash
+CI_PASSED=$(gh pr view <N> --json statusCheckRollup \
+  --jq '.statusCheckRollup | map(select(.conclusion != "SKIPPED")) | all(.conclusion == "SUCCESS")')
+```
+
+**Do NOT** use `sleep N && gh pr view ...` (blocked by Claude Code) or an `until` loop whose condition tests for `"true"` returned by the SUCCESS check — that loops forever when CI fails because `all(.conclusion == "SUCCESS")` returns `"false"`, which is never the `until` exit condition.
 
 ## CI failure handling
 
