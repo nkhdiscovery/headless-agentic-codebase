@@ -1,0 +1,64 @@
+name: Status update
+
+on:
+  schedule:
+    # Every 12 hours, at 00:00 and 12:00 UTC
+    - cron: '0 0,12 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  file-status-issue:
+    name: File status-update issue for the agent
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip if a status-update issue is already open
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          OPEN=$(gh issue list --label status-update --state open --json number --jq 'length')
+          echo "open_count=${OPEN}" >> "$GITHUB_OUTPUT"
+          if [ "${OPEN}" -gt 0 ]; then
+            echo "An open status-update issue already exists; skipping."
+          fi
+
+      - name: Create status-update issue
+        if: steps.check.outputs.open_count == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NOW: ${{ github.event.repository.updated_at }}
+        run: |
+          set -euo pipefail
+          gh issue create \
+            --label status-update \
+            --label ready-for-agent \
+            --title "Update STATUS.md (automated, $(date -u +%Y-%m-%dT%H:%MZ))" \
+            --body "$(cat <<'EOF'
+          Automated 12-hourly trigger. Regenerate `STATUS.md` so the human can see project state at a glance.
+
+          ## What to do
+
+          1. Read current `STATUS.md`.
+          2. Scan PRs merged to `main` since the last status-update issue closed (or last 12h if first run). For each, decide whether it changes a feature row (status flip, new feature, retired feature).
+          3. Scan open PRs and `in-progress`-labelled issues — these populate **Current focus** (cap at 2; if more, list them and flag the breach).
+          4. Count `needs-decision` PRs and issues — these populate **Blocked / needs-decision**.
+          5. Count `agent-proposed` issues — these populate **Agent-proposed backlog**.
+          6. Rewrite the table. Keep it user-facing: plain language, "user-testable?" column accurate.
+          7. Update the `Last updated` and `Updated by` lines at the top.
+          8. Commit on a new branch, open a PR titled `chore: refresh STATUS.md`, self-merge per unattended-rules.
+          9. Close this issue with a comment linking the merged PR.
+
+          ## Constraints
+
+          - Touch only `STATUS.md`. No other files.
+          - This counts as one work package — do not chain other work in the same cycle.
+          - If you have nothing to update (no merges, no state changes since last refresh), close this issue with a "no changes" comment and exit.
+          EOF
+          )"
