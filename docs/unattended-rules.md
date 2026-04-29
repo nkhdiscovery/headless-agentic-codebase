@@ -107,6 +107,63 @@ You are a founding engineer with product authority. Ship working tested code. Ev
 
 Even if (A) finishes quickly and (B) has work waiting, do not start (B) in the same cycle. Exit. The launcher will start a fresh cycle for the next work package within seconds when the queue is non-empty (burst mode). Chaining bloats context and muddles cost attribution.
 
+### Hard rule: no collisions between in-flight PRs
+
+Independent work packages run in parallel — that's how 24/7 mode keeps moving. There is **no numeric cap**. But two kinds of collision must be screened first, and they need different checks:
+
+- **Conceptual collision** — two PRs implement the same feature with different approaches (e.g. billing via framework X in `pkg/x` vs framework Y in `pkg/y`). Files don't overlap; only one approach should win. The human needs to pick.
+- **Mechanical collision** — two PRs touch the same logical area in the same file. The second PR will hit a real merge conflict or assume code state the first PR changed.
+
+After writing your plan in (B) step 4, but **before any implementation**, run both screens.
+
+#### 1. Conceptual screen (always)
+
+```bash
+gh pr list --state open --json number,title,body \
+  --jq '.[] | "#\(.number) — \(.title)\n\(.body | tostring | .[0:400])\n---"'
+```
+
+Compare each open PR's title + body excerpt against your plan's `Problem` and `Approach`. You're looking for: same feature being built two ways, competing solutions to the same problem, duplicated effort.
+
+If conceptually overlapping with PR #X:
+
+- Remove `in-progress` from the issue.
+- Add `needs-decision`.
+- Comment: `"Conceptual overlap with PR #X — both implement <feature>; this issue uses <approach A>, PR #X uses <approach B>. Human review needed to pick."`
+- Pick the next `ready-for-agent` issue and re-run from step 1.
+
+Cost note: ~400 chars × open PRs. For 20 open PRs, ~2k tokens. Cheap.
+
+#### 2. Mechanical screen (only if step 1 passes)
+
+```bash
+PLANNED_FILES=$(grep -E '^- ' plans/<n>-<slug>.md | sed 's/^- //')
+for pr in $(gh pr list --state open --json number --jq '.[].number'); do
+  CHANGED=$(gh pr diff "$pr" --name-only)
+  OVERLAP=$(comm -12 <(echo "$PLANNED_FILES" | sort -u) <(echo "$CHANGED" | sort -u))
+  if [ -n "$OVERLAP" ]; then
+    echo "File overlap with PR #$pr: $OVERLAP"
+  fi
+done
+```
+
+No file overlap → proceed.
+
+For each PR #X with file overlap, read the overlapping file's hunks only (`gh pr diff <X> -- <file>`), not the whole diff. Compare against the plan:
+
+- **Same logical area** (same function, same section, same change): defer with `"Defers to PR #X (mechanical overlap on <area> in <file>)"`. Remove `in-progress`, pick the next ready issue, re-run from step 1.
+- **Different concerns in the same file** (one touches function A, the other function B; one edits a different section): proceed. Note the file-level overlap under `Risks` and expect a small rebase when PR #X lands.
+
+**Hot-file bail-out:** if step 2 reports file overlap with >3 open PRs on the same file, default to defer without reading any diffs. Reading 4+ diffs costs more than waiting one cycle.
+
+#### Empty queue
+
+If every ready issue trips at least one screen with some open PR, fall through to (C) self-audit and cycle-exit. The launcher restarts the agent automatically; the agent never stops the unattended loop on its own.
+
+#### Why two checks
+
+File overlap alone misses conceptual conflicts (different paths, same feature). Title/body alone misses mechanical conflicts (unrelated features that happen to touch the same module). Both signals together catch the failure modes that actually cost re-work.
+
 ## Creative autonomy
 
 When queue is empty or between issues:
