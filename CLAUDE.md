@@ -46,9 +46,10 @@ If marker absent: interactive mode, human is present, ask when unsure.
 ## What lives where
 
 - `CLAUDE.md` — this file, always loaded
+- `STATUS.md` — non-technical project status; feature table + current focus. Refreshed by 12h cron via `status-update` issues.
 - `docs/product.md` — product vision, market, open decisions
 - `docs/architecture.md` — technical architecture
-- `docs/phases.md` — build phases / roadmap
+- `docs/phases.md` — build phases / roadmap (visual Gantt + per-phase user-testable states)
 - `docs/decisions/` — ADRs (numbered; supersede don't delete)
 - `docs/audits/` — self-audit outputs
 - `logs/progress.md` — plain-English log of what's been built
