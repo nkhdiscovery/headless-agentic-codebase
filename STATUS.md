@@ -7,12 +7,18 @@ High-level, non-technical view of what's shipped, what's in flight, and what's n
 
 ## Current focus
 
-> Max **2** work packages in flight at once. Finish before starting new.
+> Independent work packages run in parallel. Two collision checks gate new work: **conceptual** (same feature, different approach — needs human pick) and **mechanical** (same code area, real rebase). Files don't have to overlap to collide. The agent never stops the unattended loop; it defers or hands off when collisions show up.
 
-**Active work packages:** 0 / 2
+**Active work packages:** 0
 - _none_
 
-**Blocked / needs-decision:** 0
+**Deferred — mechanical overlap:** 0
+- _none_
+
+**Deferred — conceptual overlap (`needs-decision`):** 0
+- _none_
+
+**Blocked — other `needs-decision`:** 0
 - _none_
 
 **Agent-proposed backlog:** 0 ideas filed, 0 started
