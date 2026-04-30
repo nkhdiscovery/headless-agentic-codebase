@@ -51,6 +51,19 @@ fi
 mkdir -p .claude logs/daily
 touch .claude/unattended
 
+# --- Cleanup runs on any exit (success, error, or signal) -----------------
+# Without this, `set -euo pipefail` tripping anywhere below — most easily on
+# a SIGPIPE in the stream-json | jq | tee pipeline — would skip cleanup,
+# leaving .claude/unattended in place and the agent container running.
+cleanup() {
+    local rc=$?
+    echo "" >> "${LOG_FILE:-/dev/null}" 2>/dev/null || true
+    echo "Session ended: $(date -u +%Y-%m-%dT%H:%M:%SZ) (exit=$rc)" >> "${LOG_FILE:-/dev/null}" 2>/dev/null || true
+    rm -f .claude/unattended
+    $COMPOSE stop agent >/dev/null 2>&1 || true
+}
+trap cleanup EXIT INT TERM
+
 # --- Boot the agent container ---------------------------------------------
 
 echo "Starting agent container (project: $COMPOSE_PROJECT_NAME)..."
@@ -104,8 +117,17 @@ HUMANISE='
   else empty end
 '
 
+# The inner loop also writes the raw stream to a file *inside the container*
+# (via tee in the loop body — see RAW_LOG_IN_CONTAINER). That way, even if the
+# host-side display pipeline (jq | tee) collapses with SIGPIPE, the worker keeps
+# running and we still have a forensic record on disk.
+RAW_LOG_IN_CONTAINER="/workspace/$RAW_LOG"
+
+# Make the display pipeline non-fatal: if jq dies, fall through to cat so the
+# pipeline never breaks. `|| true` on the outer pipe is a final belt-and-suspenders.
+set +e
 $COMPOSE exec -T agent bash -lc "
-    set -euo pipefail
+    set -uo pipefail
     cd /workspace
     source agent.config
     source agents/\${AGENT_RUNTIME}.sh
@@ -113,10 +135,22 @@ $COMPOSE exec -T agent bash -lc "
     check_agent_installed
     check_agent_authed
 
+    # Helpers below deliberately decouple the gh|jq pipe from the assignment
+    # so that a transient gh failure or empty payload can't trip pipefail and
+    # silently kill the loop. Defaults are applied with \${var:-0}.
+    count_or_zero() {
+        # Stdin: JSON array. Stdout: integer length, or 0 on any failure.
+        local n
+        n=\$(jq 'length' 2>/dev/null) || n=0
+        echo \"\${n:-0}\"
+    }
+
     has_work() {
         local ready_count fix_count
-        ready_count=\$(gh issue list --label ready-for-agent --state open --json number 2>/dev/null | jq 'length' || echo 0)
-        fix_count=\$(gh pr list --label agent-please-fix --state open --json number 2>/dev/null | jq 'length' || echo 0)
+        ready_count=\$(gh issue list --label ready-for-agent --state open --json number 2>/dev/null | count_or_zero)
+        fix_count=\$(gh pr list --label agent-please-fix --state open --json number 2>/dev/null | count_or_zero)
+        ready_count=\${ready_count:-0}
+        fix_count=\${fix_count:-0}
         [ \"\$ready_count\" -gt 0 ] || [ \"\$fix_count\" -gt 0 ]
     }
 
@@ -128,7 +162,8 @@ $COMPOSE exec -T agent bash -lc "
         local cap=\"\${AGENT_MAX_PRS_PER_DAY:-0}\"
         [ \"\$cap\" = \"0\" ] && return 0
         local merged_today
-        merged_today=\$(gh pr list --state merged --search \"merged:\$(date +%Y-%m-%d) author:@me\" --json number 2>/dev/null | jq 'length' || echo 0)
+        merged_today=\$(gh pr list --state merged --search \"merged:\$(date +%Y-%m-%d) author:@me\" --json number 2>/dev/null | count_or_zero)
+        merged_today=\${merged_today:-0}
         if [ \"\$merged_today\" -ge \"\$cap\" ]; then
             echo \"Daily PR cap reached: \$merged_today merged today >= \$cap\"
             return 1
@@ -159,14 +194,15 @@ $COMPOSE exec -T agent bash -lc "
             sleep \"\${AGENT_IDLE_SLEEP}\"
         fi
     done
-" 2>&1 | tee -a "$RAW_LOG" | jq -Rr --unbuffered "$HUMANISE" 2>/dev/null | tee -a "$LOG_FILE"
+" 2>&1 \
+    | tee -a "$RAW_LOG" \
+    | { jq -Rr --unbuffered "$HUMANISE" 2>/dev/null || cat; } \
+    | tee -a "$LOG_FILE" \
+    || true
+set -e
 
 # --- Post-session cleanup --------------------------------------------------
-
-echo "" >> "$LOG_FILE"
-echo "Session ended: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$LOG_FILE"
-
-rm -f .claude/unattended
-$COMPOSE stop agent
+# Cleanup is handled by the EXIT trap registered above, so it runs even on
+# pipefail/SIGPIPE/Ctrl-C. Nothing to do here beyond a friendly final message.
 
 echo "Agent stopped. See $LOG_FILE."
