@@ -91,29 +91,30 @@ echo ""
 
 # Filter stream-json into human-readable lines.
 #
-# - assistant text   -> the line as-is
-# - assistant tool   -> "→ Name(short input)"
-# - tool_result      -> "  result: <truncated>"
-# - rate_limit       -> "[rate limit] <status>"
-# - non-JSON lines (launcher messages, git output) pass through verbatim
+# - assistant text   -> "[HH:MM:SS] the line as-is"
+# - assistant tool   -> "[HH:MM:SS] → Name(short input)"
+# - tool_result      -> "[HH:MM:SS]   result: <truncated>"
+# - rate_limit       -> "[HH:MM:SS] [rate limit] <status>"
+# - non-JSON lines (launcher messages, git output) pass through verbatim with timestamp
 HUMANISE='
+  (now | strftime("%Y-%m-%d %H:%M:%S")) as $ts |
   . as $raw |
   (try fromjson catch null) as $j |
   if $j == null then
-    $raw
+    "\($ts) \($raw)"
   elif $j.type == "assistant" then
     ($j.message.content[]? |
-      if .type == "text" then .text
+      if .type == "text" then "\($ts) \(.text)"
       elif .type == "tool_use" then
-        "→ \(.name)(" + ((.input | tostring)[:100]) + ")"
+        "\($ts) → \(.name)(" + ((.input | tostring)[:100]) + ")"
       else empty end)
   elif $j.type == "user" then
     ($j.message.content[]? |
       if .type == "tool_result" then
-        "  result: " + ((.content | tostring | gsub("\n"; " "))[:200])
+        "\($ts)   result: " + ((.content | tostring | gsub("\n"; " "))[:200])
       else empty end)
   elif $j.type == "rate_limit_event" then
-    "[rate limit] " + $j.rate_limit_info.status
+    "\($ts) [rate limit] " + $j.rate_limit_info.status
   else empty end
 '
 
