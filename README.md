@@ -112,12 +112,15 @@ Plus the conventions that make it actually pleasant: ADRs for architectural deci
 gh repo create my-project --template <user>/agent-project-pack --private --clone
 cd my-project
 
-# 2. Personalise the templates
+# 2. Make sure your repo uses HTTPS remotes and configure Git to use GitHub CLI for credentials. To apply this on your repo, use the following command:
+git config --local credential.https://github.com.helper '!gh auth git-credential'
+
+# 3. Personalise the templates
 #    Replace {{PROJECT_NAME}} placeholders in CLAUDE.md
 #    Fill in docs/product.md, docs/architecture.md, docs/phases.md
 #    (or use BOOTSTRAP_PROMPT.md with any AI chat to do this from your phone)
 
-# 3. Create the agent's labels
+# 4. Create the agent's labels
 for l in "ready-for-agent:0e8a16" "agent-produced:1f77b4" "agent-please-fix:d93f0b" \
          "agent-proposed:5319e7" "needs-decision:d93f0b" "in-progress:0075ca" \
          "blocked:b60205" "human-only:000000" "human-takeover:000000" \
@@ -126,15 +129,15 @@ for l in "ready-for-agent:0e8a16" "agent-produced:1f77b4" "agent-please-fix:d93f
   gh label create "${l%:*}" --color "${l##*:}" --force
 done
 
-# 4. Customise Makefile test/lint targets for your stack
+# 5. Customise Makefile test/lint targets for your stack
 #    (Python: ruff/mypy/pytest; Node: eslint/tsc/jest; Go: vet/test; Rust: clippy/test)
 
-# 5. Build the dev container
+# 6. Build the dev container
 make build && make ci
 
-# 6. Seed 5 ready-for-agent issues with clear acceptance criteria
+# 7. Seed 5 ready-for-agent issues with clear acceptance criteria
 
-# 7. Launch
+# 8. Launch
 make agent-start
 ```
 

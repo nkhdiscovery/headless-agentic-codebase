@@ -46,7 +46,33 @@ if ! git diff --quiet HEAD; then
     exit 1
 fi
 
+ensure_github_auth() {
+    local token="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+
+    if [ -n "$token" ]; then
+        export GH_TOKEN="$token"
+        export GITHUB_TOKEN="$token"
+        return 0
+    fi
+
+    if ! command -v gh >/dev/null 2>&1; then
+        echo "ERROR: gh CLI not found on host. Install/authenticate gh before launching the agent."
+        exit 1
+    fi
+
+    if ! token="$(gh auth token 2>/dev/null)"; then
+        echo "ERROR: no usable GitHub token found for the container."
+        echo "Run: gh auth login -h github.com"
+        exit 1
+    fi
+
+    export GH_TOKEN="$token"
+    export GITHUB_TOKEN="$token"
+}
+
 # --- Place the unattended marker ------------------------------------------
+
+ensure_github_auth
 
 mkdir -p .claude logs/daily
 touch .claude/unattended
