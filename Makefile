@@ -2,7 +2,7 @@
 # All commands route through Docker so dev matches CI exactly.
 # Customise test/lint/format targets per language.
 
-.PHONY: help build rebuild shell test lint format ci daemon \
+.PHONY: help build rebuild shell test lint format docs-gate ci daemon \
         agent-start agent-stop agent-logs agent-cost sync-template clean fresh
 
 # Project-scoped compose — derives a unique name from the repo directory so
@@ -43,7 +43,10 @@ lint:  ## Run linters
 format:  ## Auto-format
 	$(COMPOSE) run --rm dev sh -c "echo 'Configure format command in Makefile'"
 
-ci: lint test  ## Run full CI suite
+docs-gate:  ## Enforce per-module codebase.md updates (same gate as the optional CI workflow)
+	@bash scripts/docs-gate.sh
+
+ci: lint test docs-gate  ## Run full CI suite locally — the merge gate (GitHub Actions is opt-in/human-only; see .github/workflows/README.md)
 
 # --- Agent ---
 agent-start:  ## Launch unattended agent

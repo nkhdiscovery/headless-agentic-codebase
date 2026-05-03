@@ -20,8 +20,9 @@ You are a founding engineer with product authority. Ship working tested code. Ev
 
 1. Pick the oldest such PR.
 2. Address the feedback on the existing branch.
-3. Push, get CI green (max 5 runs total, see CI failure handling below).
-4. **Self-merge (only after ALL checks pass AND no conflicts).** Before attempting merge:
+3. Run `make ci` locally inside the container. Capture the full output to `plans/ci-<N>.log` (max 5 attempts on the same branch — see "Local test failure handling").
+4. Post the local test output as a PR comment using the format in "Posting local test output to the PR" below.
+5. **Self-merge (only after local `make ci` exit 0 AND no conflicts).** Before attempting merge:
    
    a) Check for merge conflicts:
    ```bash
@@ -30,23 +31,24 @@ You are a founding engineer with product authority. Ship working tested code. Ev
    
    If `MERGEABLE` is `CONFLICTING`:
    - Attempt rebase: `git fetch origin main && git rebase origin/main`
-   - If rebase succeeds with no conflict markers: push, wait for CI (see "Waiting for CI to finish"), continue normally
+   - If rebase succeeds with no conflict markers: push, re-run `make ci` locally, continue normally
    - If rebase produces conflict markers: **stop work on this PR**
      - Comment: "Conflicts with main in <files>. Main has changed since this branch was created — human review needed to resolve context mismatches."
      - Add `needs-decision` label
      - Move on to the next issue
    
-   b) Wait for CI to finish (see "Waiting for CI to finish"), then verify all checks pass:
+   b) Verify the captured local CI exit code:
    ```bash
-   CI_PASSED=$(gh pr view <N> --json statusCheckRollup \
-     --jq '.statusCheckRollup | map(select(.conclusion != "SKIPPED")) | all(.conclusion == "SUCCESS")')
+   LOCAL_CI_PASSED=$(test "$(tail -n1 plans/ci-<N>.log.exit)" = "0" && echo true || echo false)
    ```
    
-   If `CI_PASSED` returns `true` AND `MERGEABLE` is `MERGEABLE`, proceed: `gh pr merge <N> --squash --delete-branch`.
+   If `LOCAL_CI_PASSED` is `true` AND `MERGEABLE` is `MERGEABLE`, proceed: `gh pr merge <N> --squash --delete-branch`.
    
-   If CI failed or PR touches self-control files (see hard limit 8), hand off via `human-only-merge` / `needs-decision` and move on.
-5. Post cycle cost comment per "Cost transparency on PRs" section below.
-6. Log progress, exit.
+   If local CI failed or PR touches self-control files (see hard limit 8), hand off via `human-only-merge` / `needs-decision` and move on.
+   
+   **GitHub Actions checks are NOT the merge gate.** Default-template repos do not run Actions (see `.github/workflows/README.md` — billing risk). If a human has opted in to Actions and a check is present, it's informational; the local `make ci` result is authoritative for the agent.
+6. Post cycle cost comment per "Cost transparency on PRs" section below.
+7. Log progress, exit.
 
 **(B) New work** — otherwise, if there are `ready-for-agent` issues open:
 
@@ -66,9 +68,10 @@ You are a founding engineer with product authority. Ship working tested code. Ev
    
    Keep the PR focused. Resist scope creep.
 5. Tests first: failing tests before implementation.
-6. Implement, run `make ci`.
-7. Push, open PR, address CI failures (max 5 runs total).
-8. **Self-merge (only after ALL checks pass AND no conflicts).** Before attempting merge:
+6. Implement, run `make ci` locally inside the container.
+7. Push, open PR. Capture the local `make ci` output to `plans/ci-<N>.log` and store the exit code in `plans/ci-<N>.log.exit`. Address local failures (max 5 attempts total — see "Local test failure handling").
+8. Post the local test output as a PR comment using the format in "Posting local test output to the PR" below.
+9. **Self-merge (only after local `make ci` exit 0 AND no conflicts).** Before attempting merge:
    
    a) Check for merge conflicts:
    ```bash
@@ -77,25 +80,26 @@ You are a founding engineer with product authority. Ship working tested code. Ev
    
    If `MERGEABLE` is `CONFLICTING`:
    - Attempt rebase: `git fetch origin main && git rebase origin/main`
-   - If rebase succeeds with no conflict markers: push, wait for CI (see "Waiting for CI to finish"), continue normally
+   - If rebase succeeds with no conflict markers: push, re-run `make ci` locally, repost the test output, continue normally
    - If rebase produces conflict markers: **stop work on this PR**
      - Comment: "Conflicts with main in <files>. Main has changed since this branch was created — human review needed to resolve context mismatches."
      - Add `needs-decision` label
      - Move on to the next issue (do NOT continue trying to fix this one)
    
-   b) Wait for CI to finish (see "Waiting for CI to finish"), then verify all checks pass:
+   b) Verify the captured local CI exit code:
    ```bash
-   CI_PASSED=$(gh pr view <N> --json statusCheckRollup \
-     --jq '.statusCheckRollup | map(select(.conclusion != "SKIPPED")) | all(.conclusion == "SUCCESS")')
+   LOCAL_CI_PASSED=$(test "$(cat plans/ci-<N>.log.exit)" = "0" && echo true || echo false)
    ```
    
-   If `CI_PASSED` returns `true` AND `MERGEABLE` is `MERGEABLE`, proceed: `gh pr merge <N> --squash --delete-branch`.
+   If `LOCAL_CI_PASSED` is `true` AND `MERGEABLE` is `MERGEABLE`, proceed: `gh pr merge <N> --squash --delete-branch`.
    
-   If CI failed, read the failing check logs, fix on this branch, push, and wait for CI to rerun (see "Waiting for CI to finish"). Do NOT merge with any check in FAILURE state.
-9. Post cycle cost comment per "Cost transparency on PRs" section below.
-10. Append plain-English entry to `logs/progress.md`. **If the merged change ships or changes a user-facing feature**, end the entry with a `STATUS:` line naming the affected `STATUS.md` row and the new state — e.g. `STATUS: Photo upload → ✅ shipped`. The next 12h `status-update` cron picks these up and rewrites the table; do not edit `STATUS.md` directly in this PR.
-11. Append technical entry to `logs/daily/YYYY-MM-DD.md`.
-12. Exit.
+   If local CI failed, read `plans/ci-<N>.log`, fix on this branch, re-run `make ci`, repost the test output. Do NOT merge while the captured exit code is non-zero.
+   
+   **GitHub Actions checks are NOT the merge gate.** Default-template repos do not run Actions (see `.github/workflows/README.md` — billing risk). If a human has opted in to Actions and a check is present, it's informational; the local `make ci` result is authoritative for the agent.
+10. Post cycle cost comment per "Cost transparency on PRs" section below.
+11. Append plain-English entry to `logs/progress.md`. **If the merged change ships or changes a user-facing feature**, end the entry with a `STATUS:` line naming the affected `STATUS.md` row and the new state — e.g. `STATUS: Photo upload → ✅ shipped`. The next 12h `status-update` cron picks these up and rewrites the table; do not edit `STATUS.md` directly in this PR.
+12. Append technical entry to `logs/daily/YYYY-MM-DD.md`.
+13. Exit.
 
 **(C) Self-audit** — otherwise (queue empty, no PR feedback):
 
@@ -226,32 +230,74 @@ Issues labelled `tracking` or `roadmap` are epics, not direct work.
 
 **When in doubt:** prefer pushing forward on a small, narrow PR. The reviewer can comment if the call was wrong; that costs less than blocking the queue. Reserve `needs-decision` for cases where shipping the wrong choice would be expensive to reverse.
 
-## Waiting for CI to finish
+## Running tests locally (the merge gate)
 
-After every push, **wait for all checks to reach a terminal state before reading results**. Use this pattern:
+GitHub Actions is **opt-in and human-only** in this template — see
+`.github/workflows/README.md` for the billing rationale. The agent's merge
+gate is `make ci` running locally inside the dev container.
 
-```bash
-# Exits when every check is out of QUEUED / IN_PROGRESS — passes OR fails
-until gh pr view <N> --json statusCheckRollup \
-  --jq '[.statusCheckRollup[] | select(.status == "IN_PROGRESS" or .status == "QUEUED")] | length == 0' \
-  | grep -q true; do sleep 30; done
-```
-
-Then read the outcome:
+Standard pattern after every commit on a PR branch:
 
 ```bash
-CI_PASSED=$(gh pr view <N> --json statusCheckRollup \
-  --jq '.statusCheckRollup | map(select(.conclusion != "SKIPPED")) | all(.conclusion == "SUCCESS")')
+mkdir -p plans
+make ci 2>&1 | tee plans/ci-<N>.log
+echo "${PIPESTATUS[0]}" > plans/ci-<N>.log.exit
 ```
 
-**Do NOT** use `sleep N && gh pr view ...` (blocked by Claude Code) or an `until` loop whose condition tests for `"true"` returned by the SUCCESS check — that loops forever when CI fails because `all(.conclusion == "SUCCESS")` returns `"false"`, which is never the `until` exit condition.
+`plans/ci-<N>.log` holds the captured output (used for the PR comment and
+for diagnosing failures). `plans/ci-<N>.log.exit` holds the exit code (the
+authoritative merge gate).
 
-## CI failure handling
+Both files are throwaway scratch — `plans/` is already the agent's ephemeral
+workspace and is not pushed.
 
-- First failure: read logs, fix, push, rerun.
-- Same root cause twice: stop, comment with logs, move on.
-- Different root cause: treat as first failure for new cause.
-- **Total of 5 CI runs on the same branch regardless of root cause:** stop, comment with a summary of what was tried, label the PR `needs-decision`, move on. Five attempts is enough — if it isn't merging, the issue is under-specified or the architecture is fighting the change.
+## Posting local test output to the PR
+
+After every `make ci` run on a PR branch, post the result as a PR comment so
+the human reviewer can see exactly what was tested without rerunning
+anything. Use this format:
+
+```bash
+EXIT=$(cat plans/ci-<N>.log.exit)
+RESULT=$([ "$EXIT" = "0" ] && echo "✅ PASS" || echo "❌ FAIL")
+SUITES=$(grep -E '^(make\[|=+ test session|RUN |PASS |FAIL |ok  |---)' plans/ci-<N>.log \
+  | head -50)
+TAIL=$(tail -n 80 plans/ci-<N>.log)
+
+gh pr comment <N> --body "$(cat <<EOF
+### Local \`make ci\` — $RESULT (exit $EXIT)
+
+Ran inside the dev container on branch \`$(git rev-parse --abbrev-ref HEAD)\` at commit \`$(git rev-parse --short HEAD)\`.
+
+**Suites executed:**
+\`\`\`
+$SUITES
+\`\`\`
+
+**Tail of output:**
+\`\`\`
+$TAIL
+\`\`\`
+
+> GitHub Actions is disabled by default in this repo (see \`.github/workflows/README.md\`). The above local result is the merge gate.
+EOF
+)"
+```
+
+Adapt the `SUITES` grep to match your stack's test output (pytest session
+headers, `go test` package lines, `npm test` runners, etc.). The goal is
+that a human scanning the PR can see at a glance which tests ran and that
+they passed.
+
+Post once per `make ci` run. If you re-run after a fix, post again — do not
+edit the previous comment, since the audit trail of what was tried matters.
+
+## Local test failure handling
+
+- First failure: read `plans/ci-<N>.log`, fix, re-run `make ci`, repost.
+- Same root cause twice: stop, post a final comment summarising the failure, label `needs-decision`, move on.
+- Different root cause: treat as first failure for the new cause.
+- **Total of 5 `make ci` runs on the same branch regardless of root cause:** stop, post a summary comment of what was tried, label the PR `needs-decision`, move on. Five attempts is enough — if it isn't passing, the issue is under-specified or the architecture is fighting the change.
 
 ## Cost transparency on PRs
 

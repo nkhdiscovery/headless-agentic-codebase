@@ -86,7 +86,9 @@ Plus the conventions that make it actually pleasant: ADRs for architectural deci
 ├── plans/                       # Per-deliverable plans (ephemeral)
 └── .github/
     ├── CODEOWNERS               # Security-sensitive paths
-    ├── workflows/ci.yml         # CI with docs-gate job
+    ├── workflows/README.md      # ⚠️ Actions billing warning + opt-in setup
+    ├── workflows/ci.yml.optional # Disabled by default — rename to ci.yml to opt in (human-only)
+    ├── workflows/status-update.yml # 12h cron that files status-update issues
     ├── ISSUE_TEMPLATE/
     └── pull_request_template.md
 ```
@@ -172,11 +174,13 @@ Per-day technical log: every issue picked up, every PR opened, every CI failure.
 
 The hardest problem with long-running agent work is **docs drifting from code**. Over weeks the agent ships features faster than its own context can stay accurate; eventually it starts making decisions based on stale assumptions.
 
-This template solves it with a CI gate. Every PR that changes `<source_root>/<module>/**/*.<ext>` must also change `docs/codebase/<module>.md`. The gate runs on every PR; trivial PRs (typo, log string) bypass via the `docs-exempt` label.
+This template solves it with a docs gate. Every PR that changes `<source_root>/<module>/**/*.<ext>` must also change `docs/codebase/<module>.md`. The gate is enforced by `scripts/docs-gate.sh`, which the agent runs locally as part of `make ci`. Trivial PRs (typo, log string) bypass via the `docs-exempt` label.
+
+By default the gate runs **only locally** — GitHub Actions is opt-in and human-only in this template (see `.github/workflows/README.md` for the billing rationale; the workflow file ships as `ci.yml.optional`). If you opt in to Actions, the same `scripts/docs-gate.sh` runs on every PR.
 
 Each per-module doc follows a strict seven-section template (What it does / Public API / Data tables / Pipeline steps / Routes / Configuration / Notes), so the agent always knows where to look up a module without re-reading its source. This is the single most impactful piece of this template — without it, agents lose coherence over time.
 
-Customise `scripts/docs-gate.sh` and the `DOCS_GATE_*` env vars in `.github/workflows/ci.yml` for your source layout.
+Customise `scripts/docs-gate.sh` (and, if you opted in, the `DOCS_GATE_*` env vars in `.github/workflows/ci.yml`) for your source layout.
 
 ## Daily workflow
 
@@ -356,7 +360,7 @@ You're not locked in — add an addon later when you need it. Remove one by dele
 The four files customised per project regardless of stack:
 - `docker/Dockerfile.dev` — language toolchain
 - `Makefile` — `test`, `lint`, `format` commands
-- `.github/workflows/ci.yml` — CI matching your Makefile
+- `.github/workflows/ci.yml.optional` — only if you opt in to GitHub Actions (human-only; see `.github/workflows/README.md` for the billing warning)
 - `pyproject.toml` / `package.json` / equivalent — project manifest
 
 Everything else (slash commands, governance docs, launcher) stays as-is.
