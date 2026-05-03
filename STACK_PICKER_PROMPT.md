@@ -81,10 +81,11 @@ When you (the agent) see this file at the repo root on a cycle:
    b. Copy `addons/<n>/scaffold/` contents into the project at the location the README specifies
    c. Append the addon's CLAUDE.md invariant block (from its README) to the project's `CLAUDE.md`
    d. If the addon adds dependencies, merge them into `pyproject.toml` / `package.json` / `Cargo.toml` as appropriate
-4. Update `.github/workflows/ci.yml`:
+4. Update `.github/workflows/ci.yml.optional` (do **not** rename it to `ci.yml` — Actions is opt-in/human-only; see `.github/workflows/README.md` for the billing rationale):
    - Set `DOCS_GATE_SOURCE_ROOT: <SOURCE_ROOT from above>`
    - Set `DOCS_GATE_EXT: <PRIMARY_EXT from above>`
    - Add stack-specific lint/test jobs if the stack provides a `ci.yml.snippet`
+   - Also export the same env vars in the root `Makefile` so local `make ci` matches what the human would get if they later opt in
 5. Run `make build` then `make ci`. If anything fails, fix until green.
 6. Move this file to `docs/stack-applied.md` so subsequent cycles skip the apply.
 7. Commit as: `chore: apply stack (<stacks>) and addons (<addons>) per docs/stack.md`

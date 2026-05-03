@@ -237,7 +237,7 @@ In another terminal:
 tail -f logs/daily/$(date +%Y-%m-%d).md
 ```
 
-**The first cycle is special.** The agent sees `docs/stack.md`, applies it (Dockerfile snippets, Makefile targets, scaffold files, CI config), runs `make build && make ci` until green, replaces the template README with a project-specific one, moves the file to `docs/stack-applied.md`, commits, self-merges. This typically takes 5–15 minutes depending on which addons you picked.
+**The first cycle is special.** The agent sees `docs/stack.md`, applies it (Dockerfile snippets, Makefile targets, scaffold files, optional `ci.yml.optional` env vars), runs `make build && make ci` locally until green, posts the local test output on the bootstrap PR, replaces the template README with a project-specific one, moves the file to `docs/stack-applied.md`, commits, self-merges. This typically takes 5–15 minutes depending on which addons you picked. The agent will **not** enable GitHub Actions on its own — Actions is opt-in/human-only because it can incur charges even on free accounts (see `.github/workflows/README.md`).
 
 **Subsequent cycles** are normal: agent picks the highest-priority `ready-for-agent` issue (the picker prompt seeded 3 of these for you), branches, plans, tests, implements, self-merges.
 

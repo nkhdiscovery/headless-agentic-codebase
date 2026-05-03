@@ -90,7 +90,7 @@ Walk away.
 - `scripts/launch-agent.sh`
 - `.claude/commands/*`
 - `docs/unattended-rules.md`
-- `.github/workflows/ci.yml` (CI lint/test commands customised later via PRs)
+- `.github/workflows/ci.yml.optional` (disabled by default — opt in only after reading `.github/workflows/README.md`; agent runs `make ci` locally instead)
 - `.github/ISSUE_TEMPLATE/agent-ready.md`
 - `.github/pull_request_template.md`
 
