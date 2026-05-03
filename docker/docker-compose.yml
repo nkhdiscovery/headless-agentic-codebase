@@ -26,6 +26,9 @@ services:
       - ${HOME}/.claude.json:/home/agent/.claude.json
       - ${HOME}/.gemini:/home/agent/.gemini
       - ${HOME}/.codex:/home/agent/.codex
+    environment:
+      GH_TOKEN: "${GH_TOKEN:-}"
+      GITHUB_TOKEN: "${GITHUB_TOKEN:-}"
     working_dir: /workspace
     tty: true
     stdin_open: true
